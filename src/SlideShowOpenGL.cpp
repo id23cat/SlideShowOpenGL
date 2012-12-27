@@ -21,7 +21,9 @@
 #include <stdio.h>
 #include <string.h>
 
-//#include "SobelFilter_kernels.h"
+#include <string>
+
+#include "initCUDA.h"
 
 // includes, project
 #include <helper_functions.h> // includes for SDK helper functions
@@ -29,12 +31,14 @@
 
 typedef unsigned char Pixel;
 
+Pixel* devdata;
+
 void cleanup(void);
 void initializeData(char *file);
 
 #define REFRESH_DELAY     10 //ms
 
-const char *sSDKsample = "CUDA Sobel Edge-Detection";
+const char *sSDKsample = "SlideShow OpenGL";
 
 static int wWidth   = 512; // Window width
 static int wHeight  = 512; // Window height
@@ -102,6 +106,7 @@ void display(void)
     //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
 
 //    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
+    checkCudaErrors(cudaMemcpy(data, devdata, imWidth*imHeight, cudaMemcpyDeviceToDevice));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
 
     glClear(GL_COLOR_BUFFER_BIT);
@@ -200,6 +205,7 @@ void cleanup(void)
     glDeleteBuffers(1, &pbo_buffer);
     glDeleteTextures(1, &texid);
 //    deleteTexture();
+    deleteImage(devdata);
 
     sdkDeleteTimer(&timer);
 }
@@ -239,6 +245,7 @@ void initializeData(char *file)
     imWidth = (int)w;
     imHeight = (int)h;
 //    setupTexture(imWidth, imHeight, pixels, g_Bpp);
+    devdata = setupImage(imWidth, imHeight, pixels, g_Bpp);
 
     memset(pixels, 0x0, g_Bpp * sizeof(Pixel) * imWidth * imHeight);
 
@@ -281,7 +288,13 @@ void loadDefaultImage(char *loc_exec)
 
     printf("Reading image: lena.pgm\n");
     const char *image_filename = "lena.pgm";
-    char *image_path = sdkFindFilePath(image_filename, loc_exec);
+//    char *image_path = sdkFindFilePath(image_filename, loc_exec);
+    std::string str = loc_exec;
+    str.append(std::string(image_filename));
+    char *image_path;
+    image_path = (char*) malloc(str.length());
+    strcpy(image_path, str.c_str());
+    printf("image_path = %s\n", image_path);
 
     if (image_path == NULL)
     {
@@ -357,7 +370,8 @@ int main(int argc, char **argv)
 	    glutKeyboardFunc(keyboard);
 //	    glutReshapeFunc(reshape);
 
-	    loadDefaultImage(argv[0]);
+	    printf("loadDefaultImage(%s)\n", argv[1]);
+	    loadDefaultImage(argv[1]);
 
 	    // If code is not printing the USage, then we execute this path.
 	    printf("I: display Image (no filtering)\n");
