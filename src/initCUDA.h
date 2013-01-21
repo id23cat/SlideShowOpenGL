@@ -10,7 +10,7 @@
 
 typedef unsigned char Pixel;
 
-Pixel *setupImage(int width, int height, unsigned char *pixels, int pixelsize);
+Pixel *loadToDevice(int width, int height, Pixel *pixels, int pixelsize);
 
 void deleteImage(Pixel *devPtr);
 

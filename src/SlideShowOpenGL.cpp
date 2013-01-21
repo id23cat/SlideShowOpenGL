@@ -5,384 +5,411 @@
  *      Author: id23cat
  */
 // OpenGL Graphics includes
-#include <GL/glew.h>
-#if defined(__APPLE__) || defined(MACOSX)
-#include <GLUT/glut.h>
-#else
-#include <GL/freeglut.h>
-#endif
+//#include <GL/glew.h>
+//#if defined(__APPLE__) || defined(MACOSX)
+//#include <GLUT/glut.h>
+//#else
+//#include <GL/freeglut.h>
+//#endif
+//
+//// CUDA utilities and system includes
+//#include <cuda_runtime.h>
+//#include <cuda_gl_interop.h>
+//
+//// Includes
+//#include <stdlib.h>
+//#include <stdio.h>
+//#include <string.h>
+//
+//#include <string>
+//
+//#include "initCUDA.h"
+//
+//// includes, project
+//#include <helper_functions.h> // includes for SDK helper functions
+//#include <helper_cuda.h>      // includes for cuda initialization and error checking
 
-// CUDA utilities and system includes
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
+#include "GLSlideShow.h"
 
-// Includes
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
-#include <string>
-
-#include "initCUDA.h"
-
-// includes, project
-#include <helper_functions.h> // includes for SDK helper functions
-#include <helper_cuda.h>      // includes for cuda initialization and error checking
-
-typedef unsigned char Pixel;
-
-Pixel* devdata;
-
-void cleanup(void);
-void initializeData(char *file);
-
-#define REFRESH_DELAY     10 //ms
-
-const char *sSDKsample = "SlideShow OpenGL";
-
-static int wWidth   = 512; // Window width
-static int wHeight  = 512; // Window height
-static int imWidth  = 0;   // Image width
-static int imHeight = 0;   // Image height
-
-// Code to handle Auto verification
-const int frameCheckNumber = 4;
-int fpsCount = 0;      // FPS count for averaging
-int fpsLimit = 8;      // FPS limit for sampling
-unsigned int frameCount = 0;
-unsigned int g_TotalErrors = 0;
-StopWatchInterface *timer = NULL;
-unsigned int g_Bpp;
-unsigned int g_Index = 0;
-
-bool g_bQAReadback = false;
-
-// Display Data
-static GLuint pbo_buffer = 0;  // Front and back CA buffers
-struct cudaGraphicsResource *cuda_pbo_resource; // CUDA Graphics Resource (to transfer PBO)
-
-static GLuint texid = 0;       // Texture for display
-unsigned char *pixels = NULL;  // Image pixel data on the host
-float imageScale = 1.f;        // Image exposure
-//enum SobelDisplayMode g_SobelDisplayMode;
-
-int *pArgc   = NULL;
-char **pArgv = NULL;
-
-#define OFFSET(i) ((char *)NULL + (i))
-#define MAX(a,b) ((a > b) ? a : b)
-
-void computeFPS()
-{
-    frameCount++;
-    fpsCount++;
-
-    if (fpsCount == fpsLimit)
-    {
-        char fps[256];
-        float ifps = 1.f / (sdkGetAverageTimerValue(&timer) / 1000.f);
-        sprintf(fps, "CUDA Edge Detection : %3.1f fps", ifps);
-
-        glutSetWindowTitle(fps);
-        fpsCount = 0;
-
-        sdkResetTimer(&timer);
-    }
-}
-
-// This is the normal display path
-void display(void)
-{
-    sdkStartTimer(&timer);
-
-    // Sobel operation
-    Pixel *data = NULL;
-
-    // map PBO to get CUDA device pointer
-    checkCudaErrors(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
-    size_t num_bytes;
-    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&data, &num_bytes,
-                                                         cuda_pbo_resource));
-    //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
-
-//    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
-    checkCudaErrors(cudaMemcpy(data, devdata, imWidth*imHeight, cudaMemcpyDeviceToDevice));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
-
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glBindTexture(GL_TEXTURE_2D, texid);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imWidth, imHeight,
-                    GL_LUMINANCE, GL_UNSIGNED_BYTE, OFFSET(0));
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_TEXTURE_2D);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-    glBegin(GL_QUADS);
-    glVertex2f(0, 0);
-    glTexCoord2f(0, 0);
-    glVertex2f(0, 1);
-    glTexCoord2f(1, 0);
-    glVertex2f(1, 1);
-    glTexCoord2f(1, 1);
-    glVertex2f(1, 0);
-    glTexCoord2f(0, 1);
-    glEnd();
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glutSwapBuffers();
-
-    sdkStopTimer(&timer);
-
-    computeFPS();
-}
-
-void timerEvent(int value)
-{
-    glutPostRedisplay();
-    glutTimerFunc(REFRESH_DELAY, timerEvent, 0);
-}
-
-void keyboard(unsigned char key, int /*x*/, int /*y*/)
-{
-    char temp[256];
-
-    switch (key)
-    {
-        case 27:
-        case 'q':
-        case 'Q':
-            printf("Shutting down...\n");
-            exit(EXIT_SUCCESS);
-            break;
-
-        case '-':
-            imageScale -= 0.1f;
-            printf("brightness = %4.2f\n", imageScale);
-            break;
-
-        case '=':
-            imageScale += 0.1f;
-            printf("brightness = %4.2f\n", imageScale);
-            break;
-
-        case 'i':
-        case 'I':
-//            g_SobelDisplayMode = SOBELDISPLAY_IMAGE;
-            sprintf(temp, "CUDA Edge Detection ");
-            glutSetWindowTitle(temp);
-            break;
-
-        case 's':
-        case 'S':
-//            g_SobelDisplayMode = SOBELDISPLAY_SOBELSHARED;
-            sprintf(temp, "CUDA Edge Detection ");
-            glutSetWindowTitle(temp);
-            break;
-
-        case 't':
-        case 'T':
-//            g_SobelDisplayMode = SOBELDISPLAY_SOBELTEX;
-            sprintf(temp, "CUDA Edge Detection ");
-            glutSetWindowTitle(temp);
-            break;
-
-        default:
-            break;
-    }
-}
-
-void cleanup(void)
-{
-    cudaGraphicsUnregisterResource(cuda_pbo_resource);
-
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    glDeleteBuffers(1, &pbo_buffer);
-    glDeleteTextures(1, &texid);
-//    deleteTexture();
-    deleteImage(devdata);
-
-    sdkDeleteTimer(&timer);
-}
-
-void initializeData(char *file)
-{
-    GLint bsize;
-    unsigned int w, h;
-    size_t file_length= strlen(file);
-
-    if (!strcmp(&file[file_length-3], "pgm"))
-    {
-        if (sdkLoadPGM<unsigned char>(file, &pixels, &w, &h) != true)
-        {
-            printf("Failed to load PGM image file: %s\n", file);
-            exit(EXIT_FAILURE);
-        }
-
-        g_Bpp = 1;
-    }
-    else if (!strcmp(&file[file_length-3], "ppm"))
-    {
-        if (sdkLoadPPM4(file, &pixels, &w, &h) != true)
-        {
-            printf("Failed to load PPM image file: %s\n", file);
-            exit(EXIT_FAILURE);
-        }
-
-        g_Bpp = 4;
-    }
-    else
-    {
-        cudaDeviceReset();
-        exit(EXIT_FAILURE);
-    }
-
-    imWidth = (int)w;
-    imHeight = (int)h;
-//    setupTexture(imWidth, imHeight, pixels, g_Bpp);
-    devdata = setupImage(imWidth, imHeight, pixels, g_Bpp);
-
-    memset(pixels, 0x0, g_Bpp * sizeof(Pixel) * imWidth * imHeight);
-
-    if (!g_bQAReadback)
-    {
-        // use OpenGL Path
-        glGenBuffers(1, &pbo_buffer);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER,
-                     g_Bpp * sizeof(Pixel) * imWidth * imHeight,
-                     pixels, GL_STREAM_DRAW);
-
-        glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
-
-        if ((GLuint)bsize != (g_Bpp * sizeof(Pixel) * imWidth * imHeight))
-        {
-            printf("Buffer object (%d) has incorrect size (%d).\n", (unsigned)pbo_buffer, (unsigned)bsize);
-            cudaDeviceReset();
-            exit(EXIT_FAILURE);
-        }
-
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-        // register this buffer object with CUDA
-        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo_buffer, cudaGraphicsMapFlagsWriteDiscard));
-
-        glGenTextures(1, &texid);
-        glBindTexture(GL_TEXTURE_2D, texid);
-        glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp==1) ? GL_LUMINANCE : GL_BGRA),
-                     imWidth, imHeight,  0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    }
-}
-
-void loadDefaultImage(char *loc_exec)
-{
-
-    printf("Reading image: lena.pgm\n");
-    const char *image_filename = "lena.pgm";
-//    char *image_path = sdkFindFilePath(image_filename, loc_exec);
-    std::string str = loc_exec;
-    str.append(std::string(image_filename));
-    char *image_path;
-    image_path = (char*) malloc(str.length());
-    strcpy(image_path, str.c_str());
-    printf("image_path = %s\n", image_path);
-
-    if (image_path == NULL)
-    {
-        printf("Failed to read image file: <%s>\n", image_filename);
-        exit(EXIT_FAILURE);
-    }
-
-    initializeData(image_path);
-    free(image_path);
-}
-
-void initGL(int *argc, char **argv)
-{
-    glutInit(argc, argv);
-    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
-    glutInitWindowSize(wWidth, wHeight);
-    glutCreateWindow("CUDA Edge Detection");
-
-    glewInit();
-
-    if (!glewIsSupported("GL_VERSION_1_5 GL_ARB_vertex_buffer_object GL_ARB_pixel_buffer_object"))
-    {
-        fprintf(stderr, "Error: failed to get minimal extensions for demo\n");
-        fprintf(stderr, "This sample requires:\n");
-        fprintf(stderr, "  OpenGL version 1.5\n");
-        fprintf(stderr, "  GL_ARB_vertex_buffer_object\n");
-        fprintf(stderr, "  GL_ARB_pixel_buffer_object\n");
-        exit(EXIT_FAILURE);
-    }
-}
+//typedef unsigned char Pixel;
+//
+//Pixel* devdata;
+//
+//void cleanup(void);
+//void initializeData(char *file);
+//
+//#define REFRESH_DELAY     10 //ms
+//
+//const char *sSDKsample = "SlideShow OpenGL";
+//
+//static int wWidth   = 512; // Window width
+//static int wHeight  = 512; // Window height
+//static int imWidth  = 0;   // Image width
+//static int imHeight = 0;   // Image height
+//
+//// Code to handle Auto verification
+//const int frameCheckNumber = 4;
+//int fpsCount = 0;      // FPS count for averaging
+//int fpsLimit = 8;      // FPS limit for sampling
+//unsigned int frameCount = 0;
+//unsigned int g_TotalErrors = 0;
+//StopWatchInterface *timer = NULL;
+//unsigned int g_Bpp;
+//unsigned int g_Index = 0;
+//
+//bool g_bQAReadback = false;
+//
+//// Display Data
+//static GLuint pbo_buffer = 0;  // Front and back CA buffers
+//struct cudaGraphicsResource *cuda_pbo_resource; // CUDA Graphics Resource (to transfer PBO)
+//
+//static GLuint texid = 0;       // Texture for display
+//unsigned char *pixels = NULL;  // Image pixel data on the host
+//float imageScale = 1.f;        // Image exposure
+////enum SobelDisplayMode g_SobelDisplayMode;
+//
+//int *pArgc   = NULL;
+//char **pArgv = NULL;
+//
+//#define OFFSET(i) ((char *)NULL + (i))
+//#define MAX(a,b) ((a > b) ? a : b)
+//
+//void computeFPS()
+//{
+//    frameCount++;
+//    fpsCount++;
+//
+//    if (fpsCount == fpsLimit)
+//    {
+//        char fps[256];
+//        float ifps = 1.f / (sdkGetAverageTimerValue(&timer) / 1000.f);
+//        sprintf(fps, "CUDA Edge Detection : %3.1f fps", ifps);
+//
+//        glutSetWindowTitle(fps);
+//        fpsCount = 0;
+//
+//        sdkResetTimer(&timer);
+//    }
+//}
+//
+//// This is the normal display path
+//void display(void)
+//{
+//    sdkStartTimer(&timer);
+//
+//    // Sobel operation
+//    Pixel *data = NULL;
+//
+//    // map PBO to get CUDA device pointer
+//    checkCudaErrors(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
+//    size_t num_bytes;
+//    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&data, &num_bytes,
+//                                                         cuda_pbo_resource));
+////    printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
+//
+////    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
+//    checkCudaErrors(cudaMemcpy(data, devdata, imWidth*imHeight, cudaMemcpyDeviceToDevice));
+////    printf("width = %d, height = %d\n", imWidth, imHeight);
+////    checkCudaErrors(cudaMemset(data, 128, imWidth*imHeight*sizeof(Pixel)));
+//    checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
+//
+//    glClear(GL_COLOR_BUFFER_BIT);
+//
+//    glBindTexture(GL_TEXTURE_2D, texid);
+//    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
+//    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imWidth, imHeight,
+//                    GL_LUMINANCE, GL_UNSIGNED_BYTE, OFFSET(0));
+//    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+//
+//    glDisable(GL_DEPTH_TEST);
+//    glEnable(GL_TEXTURE_2D);
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+//
+//    glBegin(GL_QUADS);
+//    glVertex2f(0, 0);
+//    glTexCoord2f(0, 0);
+//    glVertex2f(0, 1);
+//    glTexCoord2f(1, 0);
+//    glVertex2f(1, 1);
+//    glTexCoord2f(1, 1);
+//    glVertex2f(1, 0);
+//    glTexCoord2f(0, 1);
+//    glEnd();
+//    glBindTexture(GL_TEXTURE_2D, 0);
+//    glutSwapBuffers();
+//
+//    sdkStopTimer(&timer);
+//
+//    computeFPS();
+//}
+//
+//void timerEvent(int value)
+//{
+//    glutPostRedisplay();
+//    glutTimerFunc(REFRESH_DELAY, timerEvent, 0);
+//}
+//
+//void keyboard(unsigned char key, int /*x*/, int /*y*/)
+//{
+//    char temp[256];
+//
+//    switch (key)
+//    {
+//        case 27:
+//        case 'q':
+//        case 'Q':
+//            printf("Shutting down...\n");
+//            exit(EXIT_SUCCESS);
+//            break;
+//
+//        case '-':
+//            imageScale -= 0.1f;
+//            printf("brightness = %4.2f\n", imageScale);
+//            break;
+//
+//        case '=':
+//            imageScale += 0.1f;
+//            printf("brightness = %4.2f\n", imageScale);
+//            break;
+//
+//        case 'i':
+//        case 'I':
+////            g_SobelDisplayMode = SOBELDISPLAY_IMAGE;
+//            sprintf(temp, "CUDA Edge Detection ");
+//            glutSetWindowTitle(temp);
+//            break;
+//
+//        case 's':
+//        case 'S':
+////            g_SobelDisplayMode = SOBELDISPLAY_SOBELSHARED;
+//            sprintf(temp, "CUDA Edge Detection ");
+//            glutSetWindowTitle(temp);
+//            break;
+//
+//        case 't':
+//        case 'T':
+////            g_SobelDisplayMode = SOBELDISPLAY_SOBELTEX;
+//            sprintf(temp, "CUDA Edge Detection ");
+//            glutSetWindowTitle(temp);
+//            break;
+//
+//        default:
+//            break;
+//    }
+//}
+//
+//void reshape(int x, int y)
+//{
+//    glViewport(0, 0, x, y);
+//    glMatrixMode(GL_PROJECTION);
+//    glLoadIdentity();
+//    glOrtho(0, 1, 0, 1, 0, 1);
+//    glMatrixMode(GL_MODELVIEW);
+//    glLoadIdentity();
+//}
+//
+//void cleanup(void)
+//{
+//    cudaGraphicsUnregisterResource(cuda_pbo_resource);
+//
+//    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+//    glDeleteBuffers(1, &pbo_buffer);
+//    glDeleteTextures(1, &texid);
+////    deleteTexture();
+//    deleteImage(devdata);
+//
+//    sdkDeleteTimer(&timer);
+//}
+//
+//void initializeData(char *file)
+//{
+//    GLint bsize;
+//    unsigned int w, h;
+//    size_t file_length= strlen(file);
+//    printf("Opening file: %s\n", file);
+//
+//    if (!strcmp(&file[file_length-3], "pgm"))
+//    {
+//        if (sdkLoadPGM<unsigned char>(file, &pixels, &w, &h) != true)
+//        {
+//            printf("Failed to load PGM image file: %s\n", file);
+//            exit(EXIT_FAILURE);
+//        }
+//
+//        g_Bpp = 1;
+//    }
+//    else if (!strcmp(&file[file_length-3], "ppm"))
+//    {
+//        if (sdkLoadPPM4(file, &pixels, &w, &h) != true)
+//        {
+//            printf("Failed to load PPM image file: %s\n", file);
+//            exit(EXIT_FAILURE);
+//        }
+//
+//        g_Bpp = 4;
+//    }
+//    else
+//    {
+//        cudaDeviceReset();
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    imWidth = (int)w;
+//    imHeight = (int)h;
+////    setupTexture(imWidth, imHeight, pixels, g_Bpp);
+//    devdata = loadToDevice(imWidth, imHeight, pixels, g_Bpp);
+//
+//    memset(pixels, 0x0, g_Bpp * sizeof(Pixel) * imWidth * imHeight);
+//
+//    if (!g_bQAReadback)
+//    {
+//        // use OpenGL Path
+//        glGenBuffers(1, &pbo_buffer);
+//        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
+//        glBufferData(GL_PIXEL_UNPACK_BUFFER,
+//                     g_Bpp * sizeof(Pixel) * imWidth * imHeight,
+//                     pixels, GL_STREAM_DRAW);
+//
+//        glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
+//
+//        if ((GLuint)bsize != (g_Bpp * sizeof(Pixel) * imWidth * imHeight))
+//        {
+//            printf("Buffer object (%d) has incorrect size (%d).\n", (unsigned)pbo_buffer, (unsigned)bsize);
+//            cudaDeviceReset();
+//            exit(EXIT_FAILURE);
+//        }
+//
+//        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+//
+//        // register this buffer object with CUDA
+//        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo_buffer, cudaGraphicsMapFlagsWriteDiscard));
+//
+//        glGenTextures(1, &texid);
+//        glBindTexture(GL_TEXTURE_2D, texid);
+//        glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp==1) ? GL_LUMINANCE : GL_BGRA),
+//                     imWidth, imHeight,  0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+//        glBindTexture(GL_TEXTURE_2D, 0);
+//
+//        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+//        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+//    }
+//}
+//
+//void loadDefaultImage(char *loc_exec)
+//{
+//
+//    printf("Reading image: lena.pgm\n");
+//    const char *image_filename = "lena.pgm";
+////    char *image_path = sdkFindFilePath(image_filename, loc_exec);
+//    std::string str = loc_exec;
+//    str.append(std::string(image_filename));
+//    char *image_path;
+//    image_path = (char*) malloc(str.length());
+//    strcpy(image_path, str.c_str());
+//    printf("image_path = %s\n", image_path);
+//
+//    if (image_path == NULL)
+//    {
+//        printf("Failed to read image file: <%s>\n", image_filename);
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    initializeData(image_path);
+//    free(image_path);
+//}
+//
+//void initGL(int *argc, char **argv)
+//{
+//    glutInit(argc, argv);
+//    glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
+//    glutInitWindowSize(wWidth, wHeight);
+//    glutCreateWindow("CUDA Edge Detection");
+//
+//    glewInit();
+//
+//    if (!glewIsSupported("GL_VERSION_1_5 GL_ARB_vertex_buffer_object GL_ARB_pixel_buffer_object"))
+//    {
+//        fprintf(stderr, "Error: failed to get minimal extensions for demo\n");
+//        fprintf(stderr, "This sample requires:\n");
+//        fprintf(stderr, "  OpenGL version 1.5\n");
+//        fprintf(stderr, "  GL_ARB_vertex_buffer_object\n");
+//        fprintf(stderr, "  GL_ARB_pixel_buffer_object\n");
+//        exit(EXIT_FAILURE);
+//    }
+//}
 
 int main(int argc, char **argv)
 {
-	pArgc = &argc;
-	    pArgv = argv;
+	GLSlideShow slh(argc, argv);
+	printf("Run");
+	slh.OpenFile("lena.pgm");
 
-	    printf("%s Starting...\n\n", sSDKsample);
+	printf("I: display Image (no filtering)\n");
+	printf("T: display Sobel Edge Detection (Using Texture)\n");
+	printf("S: display Sobel Edge Detection (Using SMEM+Texture)\n");
+	printf("Use the '-' and '=' keys to change the brightness.\n");
+	fflush(stdout);
+//	printf("Run");
+//	void OpenFile();
 
-	    if (checkCmdLineFlag(argc, (const char **)argv, "help"))
-	    {
-	        printf("\nUsage: SobelFilter <options>\n");
-	        printf("\t\t-mode=n (0=original, 1=texture, 2=smem + texture)\n");
-	        printf("\t\t-file=ref_orig.pgm (ref_tex.pgm, ref_shared.pgm)\n\n");
-	        exit(EXIT_SUCCESS);
-	    }
-
-//	    if (checkCmdLineFlag(argc, (const char **)argv, "file"))
-//	    {
-//	        g_bQAReadback = true;
-//	        runAutoTest(argc, argv);
-//	    }
+//	pArgc = &argc;
+//	    pArgv = argv;
 //
-//	    // use command-line specified CUDA device, otherwise use device with highest Gflops/s
-//	    if (checkCmdLineFlag(argc, (const char **)argv, "device"))
+//	    printf("%s Starting...\n\n", sSDKsample);
+//
+//	    if (checkCmdLineFlag(argc, (const char **)argv, "help"))
 //	    {
-//	        printf("   This SDK does not explicitly support -device=n when running with OpenGL.\n");
-//	        printf("   When specifying -device=n (n=0,1,2,....) the sample must not use OpenGL.\n");
-//	        printf("   See details below to run without OpenGL:\n\n");
-//	        printf(" > %s -device=n\n\n", argv[0]);
-//	        printf("exiting...\n");
+//	        printf("\nUsage: SobelFilter <options>\n");
+//	        printf("\t\t-mode=n (0=original, 1=texture, 2=smem + texture)\n");
+//	        printf("\t\t-file=ref_orig.pgm (ref_tex.pgm, ref_shared.pgm)\n\n");
 //	        exit(EXIT_SUCCESS);
 //	    }
-
-	    // First initialize OpenGL context, so we can properly set the GL for CUDA.
-	    // This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
-	    initGL(&argc, argv);
-	    cudaGLSetGLDevice(gpuGetMaxGflopsDeviceId());
-
-	    sdkCreateTimer(&timer);
-	    sdkResetTimer(&timer);
-
-	    glutDisplayFunc(display);
-	    glutKeyboardFunc(keyboard);
+//
+////	    if (checkCmdLineFlag(argc, (const char **)argv, "file"))
+////	    {
+////	        g_bQAReadback = true;
+////	        runAutoTest(argc, argv);
+////	    }
+////
+////	    // use command-line specified CUDA device, otherwise use device with highest Gflops/s
+////	    if (checkCmdLineFlag(argc, (const char **)argv, "device"))
+////	    {
+////	        printf("   This SDK does not explicitly support -device=n when running with OpenGL.\n");
+////	        printf("   When specifying -device=n (n=0,1,2,....) the sample must not use OpenGL.\n");
+////	        printf("   See details below to run without OpenGL:\n\n");
+////	        printf(" > %s -device=n\n\n", argv[0]);
+////	        printf("exiting...\n");
+////	        exit(EXIT_SUCCESS);
+////	    }
+//
+//	    // First initialize OpenGL context, so we can properly set the GL for CUDA.
+//	    // This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
+//	    initGL(&argc, argv);
+//	    cudaGLSetGLDevice(gpuGetMaxGflopsDeviceId());
+//
+//	    sdkCreateTimer(&timer);
+//	    sdkResetTimer(&timer);
+//
+//	    glutDisplayFunc(display);
+//	    glutKeyboardFunc(keyboard);
 //	    glutReshapeFunc(reshape);
-
-	    printf("loadDefaultImage(%s)\n", argv[1]);
-	    loadDefaultImage(argv[1]);
-
-	    // If code is not printing the USage, then we execute this path.
-	    printf("I: display Image (no filtering)\n");
-	    printf("T: display Sobel Edge Detection (Using Texture)\n");
-	    printf("S: display Sobel Edge Detection (Using SMEM+Texture)\n");
-	    printf("Use the '-' and '=' keys to change the brightness.\n");
-	    fflush(stdout);
-	    atexit(cleanup);
-	    glutTimerFunc(REFRESH_DELAY, timerEvent,0);
-	    glutMainLoop();
-
-	    cudaDeviceReset();
+//
+//	    printf("loadDefaultImage(%s)\n", argv[1]);
+//	    loadDefaultImage(argv[1]);
+//
+//	    // If code is not printing the USage, then we execute this path.
+//	    printf("I: display Image (no filtering)\n");
+//	    printf("T: display Sobel Edge Detection (Using Texture)\n");
+//	    printf("S: display Sobel Edge Detection (Using SMEM+Texture)\n");
+//	    printf("Use the '-' and '=' keys to change the brightness.\n");
+//	    fflush(stdout);
+//	    atexit(cleanup);
+//	    glutTimerFunc(REFRESH_DELAY, timerEvent,0);
+//	    glutMainLoop();
+//
+//	    cudaDeviceReset();
 	    exit(EXIT_SUCCESS);
 }

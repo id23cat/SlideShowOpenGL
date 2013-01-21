@@ -17,7 +17,7 @@ int imWidth;
 int imHeight;
 int imPitch;
 
-Pixel *setupImage(int width, int height, Pixel *data, int pixelsize)
+Pixel *loadToDevice(int width, int height, Pixel *data, int pixelsize)
 {
 	checkCudaErrors(cudaMalloc(&devImage, width*height*pixelsize));
 	checkCudaErrors(cudaMemcpy(devImage, data, width*height*pixelsize, cudaMemcpyHostToDevice));
