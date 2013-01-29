@@ -30,12 +30,12 @@ include_directories(${COMMON_DIR}/inc)
 
 if (WIN32)
   if( CMAKE_SIZEOF_VOID_P EQUAL 8 )
-    set( LIB_PATH ${COMMON_DIR}/lib/x64/ )
+    set( LIB_PATH ${COMMON_DIR}/lib/win/x64/ )
     set( GLEW_NAME glew64 )
 #     set(GENCODE -m64)
 
   else( CMAKE_SIZEOF_VOID_P EQUAL 8 )
-    set( LIB_PATH ${COMMON_DIR}/lib/win32/ )
+    set( LIB_PATH ${COMMON_DIR}/lib/win/Win32/ )
     set( GLEW_NAME glew32 )
 #     set(GENCODE -m32)
   endif( CMAKE_SIZEOF_VOID_P EQUAL 8 )
@@ -55,8 +55,8 @@ endif (WIN32)
 MESSAGE( "LIB_PATH = " ${LIB_PATH} )
 
 #Searching GLEW
-FIND_PACKAGE(GLEW REQUIRED)
-include_directories(${GLEW_INCLUDE_DIRS})
+#FIND_PACKAGE(GLEW REQUIRED)
+#include_directories(${GLEW_INCLUDE_DIRS})
 #glew
 FIND_PATH(GLEW_INCUDE_DIR NAMES GL/glew.h PATHS ${COMMON_DIR}/inc)
 if (WIN32)
@@ -68,8 +68,8 @@ MESSAGE( STATUS "GLEW_LIBRARY = " ${GLEW_LIBRARY} )
 MESSAGE( STATUS "GLEW_INCUDE_DIR = " ${GLEW_INCUDE_DIR} )
 
 #Searching GLUT
-FIND_PACKAGE(GLUT REQUIRED)
-include_directories(${GLUT_INCLUDE_DIRS})
+#FIND_PACKAGE(GLUT REQUIRED)
+#include_directories(${GLUT_INCLUDE_DIRS})
 #freeglut
 FIND_PATH(FREEGLUT_INCLUDE_DIR NAMES GL/freeglut.h PATHS ${COMMON_DIR}/inc)
 if (WIN32)
