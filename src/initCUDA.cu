@@ -264,3 +264,118 @@ extern "C" void sobelFilter(Pixel *odata, int iw, int ih, enum SobelDisplayMode 
 
     checkCudaErrors(cudaUnbindTexture(tex));
 }
+
+
+/********************************* AbstractKernel ***********************************************************/
+void AbstractKernel::Reset(){
+	cudaDeviceReset();
+}
+
+AbstractKernel::AbstractKernel():
+		inputBufGpu(NULL), outputBufGpu(NULL)
+{
+	inBufWidth = inBufHeight = 0;
+	outBufWidth = outBufHeight = 0;
+	deviceIdx = 0;
+//	checkCudaErrors(cudaSetDevice(deviceIdx));
+}
+
+AbstractKernel::~AbstractKernel(){
+	if(inputBufGpu == outputBufGpu){
+		if(inputBufGpu){
+			checkCudaErrors(cudaFree(inputBufGpu));
+			inputBufGpu = NULL;
+			outputBufGpu = NULL;
+		}
+	}else{
+		if(inputBufGpu){
+			checkCudaErrors(cudaFree(inputBufGpu));
+			inputBufGpu = NULL;
+		}
+		if(outputBufGpu){
+			checkCudaErrors(cudaFree(outputBufGpu));
+			outputBufGpu = NULL;
+		}
+	}
+}
+
+void AbstractKernel::SetDevice(int dev){
+	deviceIdx = dev;
+	checkCudaErrors(cudaSetDevice(deviceIdx));
+}
+
+void AbstractKernel::CopyToGPU(Image inputImgCPU){
+	if( inputImgCPU.w*inputImgCPU.h >					// if memory was allocated, but less than need
+    		inBufWidth*inBufHeight && inputBufGpu ){	// then realloc memory
+			if(inputBufGpu == outputBufGpu)
+				outputBufGpu = NULL;
+			checkCudaErrors(cudaFree(inputBufGpu));
+			inputBufGpu = NULL;
+	}
+	if(!inputBufGpu)
+		checkCudaErrors(cudaMalloc(&inputBufGpu, sizeof(Pixel)*inputImgCPU.w*inputImgCPU.h));
+	checkCudaErrors(cudaMemcpy(inputBufGpu, inputImgCPU.data,
+			sizeof(Pixel)*inputImgCPU.w*inputImgCPU.h, cudaMemcpyHostToDevice));
+	outputBufGpu = inputBufGpu;
+	inBufWidth = inBufWidth = inputImgCPU.w;
+	outBufHeight = inBufHeight = inputImgCPU.h;
+}
+
+void AbstractKernel::CopyFromGPU(Image *outputImgCPU){
+	outputImgCPU->w = outBufWidth;
+	outputImgCPU->h = outBufHeight;
+	checkCudaErrors(cudaMemcpy(outputImgCPU->data, outputBufGpu,
+			sizeof(Pixel)*outputImgCPU->w*outputImgCPU->h, cudaMemcpyHostToDevice));
+}
+
+/********************************* SobelKernel ***********************************************************/
+SobelKernel::SobelKernel()//:
+//	array(NULL)
+{}
+
+SobelKernel::~SobelKernel(){
+	deleteTexture();
+}
+
+void SobelKernel::SetPropeties(enum SobelDisplayMode mode, float fScale){
+	sobelDisplayMode = mode;
+	imageScale = fScale;
+}
+
+void SobelKernel::CopyToGPU(Image inputImgCPU, int pixSize){
+//	if (pixSize == 1) {
+//		desc = cudaCreateChannelDesc<unsigned char>();
+//	} else {
+//		desc = cudaCreateChannelDesc<uchar4>();
+//	}
+//	checkCudaErrors(cudaMallocArray(&array, &desc, iw, ih));
+//	checkCudaErrors(cudaMemcpyToArray(array, 0, 0, data, Bpp*sizeof(Pixel)*iw*ih, cudaMemcpyHostToDevice));
+	inBufWidth = outBufWidth = inputImgCPU.w;
+	inBufWidth = outBufHeight = inputImgCPU.h;
+	setupTexture(inputImgCPU.w, inputImgCPU.h, inputImgCPU.data, pixSize);
+}
+
+Pixel* SobelKernel::CallKernel(Pixel *outputBUFFER){
+//	outputBufGpu = outputBUFFER;
+	sobelFilter(outputBUFFER, outBufWidth, outBufHeight, sobelDisplayMode, imageScale);
+	return outputBufGpu;
+}
+
+/********************************* MalvarKernel ***********************************************************/
+MalvarKernel::MalvarKernel():
+	BLOCKX(128), BLOCKY(16)
+{}
+
+void MalvarKernel::CopyToGPU(Image inputImgCPU){
+	cudaSetDeviceFlags(cudaDeviceMapHost);
+	dimBlock = dim3(128);
+	dimGrid = dim3((inputImgCPU.w-4 + BLOCKX - 1) / BLOCKX, (inputImgCPU.h - 4 + BLOCKY - 1) /BLOCKY);
+
+
+
+}
+
+Pixel* MalvarKernel::CallKernel(Pixel *outputBUFFER){
+
+	return outputBufGpu;
+}

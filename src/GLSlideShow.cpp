@@ -8,6 +8,8 @@
 #include "GLSlideShow.h"
 #include "initCUDA.h"
 
+SobelKernel *sobelKernel;
+
 const char *filterMode[] =
 {
     "No Filtering",
@@ -73,7 +75,9 @@ void display(void)
                                                          cuda_pbo_resource));
     //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
 
-    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
+//    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
+    sobelKernel->CallKernel(data);
+
     checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
 
     glClear(GL_COLOR_BUFFER_BIT);
@@ -212,6 +216,7 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
         default:
             break;
     }
+    sobelKernel->SetPropeties(g_SobelDisplayMode, imageScale);
 }
 
 void reshape(int x, int y)
@@ -231,7 +236,8 @@ void cleanup(void)
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     glDeleteBuffers(1, &pbo_buffer);
     glDeleteTextures(1, &texid);
-    deleteTexture();
+//    deleteTexture();
+    delete sobelKernel;
 
     sdkDeleteTimer(&timer);
 }
@@ -270,7 +276,9 @@ void initializeData(char *file)
 
     imWidth = (int)w;
     imHeight = (int)h;
-    setupTexture(imWidth, imHeight, pixels, g_Bpp);
+//    setupTexture(imWidth, imHeight, pixels, g_Bpp);
+    sobelKernel = new SobelKernel();
+    sobelKernel->CopyToGPU(Image(pixels, imWidth, imHeight), g_Bpp);
 
     memset(pixels, 0x0, g_Bpp * sizeof(Pixel) * imWidth * imHeight);
 
