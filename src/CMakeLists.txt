@@ -1,5 +1,6 @@
 #The name of the project
-PROJECT(N_Body_Simulation_CUDA)
+set( PRJNAME SlideShowOpenGL)
+PROJECT( ${PRJNAME} )
 
 #The CMake Minimum version that is required. The FindCUDA script
 #is distributed since version 2.8
@@ -8,7 +9,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 #Searching CUDA
 FIND_PACKAGE(CUDA)
 
-MESSAGE( STATUS "N_body - project is being generated" )
+MESSAGE( STATUS "SlideShowOpenGL - project is being generated" )
 
 option(CUDA_DEVICE_DEBUGGING
   "On to enable debugging device code."
@@ -23,23 +24,18 @@ if (CUDA_DEVICE_DEBUGGING)
 endif (CUDA_DEVICE_DEBUGGING)
 
 
-SET( NBODY_HEADERS
-  bodysystem.h
-  bodysystemcpu.h
-  bodysystemcpu_impl.h
-  bodysystemcuda.h
-  bodysystemcuda_impl.h
-  render_particles.h
-  tipsy.h
+SET( GLSH_HEADERS
+  GLSlideShow.h
+  initCUDA.h  
 )
 
-SET( NBODY_SRC
-  bodysystemcuda.cu
-  nbody.cpp
-  render_particles.cpp
+SET( GLSH_SRC
+  initCUDA.cu
+  GLSlideShow.cpp
+  SlideShowOpenGL.cpp
 )
 
-MESSAGE( "NBODY_SRC = " ${NBODY_SRC} )
+MESSAGE( "GLSH_SRC = " ${GLSH_SRC} )
 
 if (WIN32)
   if( CMAKE_SIZEOF_VOID_P EQUAL 8 )
@@ -94,7 +90,7 @@ include_directories(${CUDA_SDK_ROOT_DIR}/../shared/inc)
 set(GENCODE -gencode=arch=compute_30,code=sm_30 -gencode=arch=compute_30,code=compute_30)
 set(GENCODE ${GENCODE} -gencode=arch=compute_20,code=sm_20 -gencode=arch=compute_20,code=compute_20)
 
-CUDA_ADD_EXECUTABLE( nbody ${NBODY_SRC} ${NBODY_HEADERS} 
+CUDA_ADD_EXECUTABLE( ${PRJNAME} ${GLSH_SRC} ${GLSH_HEADERS} 
                      OPTIONS ${GENCODE} ${DEVICE_DEBUGGING})
 
-target_link_libraries(nbody ${ALL_LIBRARIES})
+target_link_libraries(${PRJNAME} ${ALL_LIBRARIES})
