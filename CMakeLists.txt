@@ -30,12 +30,12 @@ include_directories(${COMMON_DIR}/inc)
 
 if (WIN32)
   if( CMAKE_SIZEOF_VOID_P EQUAL 8 )
-    set( LIB_PATH ${COMMON_DIR}/lib/win/x64/ )
-    set( GLEW_NAME glew64 )
+    set( LIB_PATH ${COMMON_DIR}/lib/win/win64/ )
+    set( GLEW_NAME glew64 )	
 #     set(GENCODE -m64)
 
   else( CMAKE_SIZEOF_VOID_P EQUAL 8 )
-    set( LIB_PATH ${COMMON_DIR}/lib/win/Win32/ )
+    set( LIB_PATH ${COMMON_DIR}/lib/win/win32/ )
     set( GLEW_NAME glew32 )
 #     set(GENCODE -m32)
   endif( CMAKE_SIZEOF_VOID_P EQUAL 8 )
@@ -61,6 +61,7 @@ MESSAGE( "LIB_PATH = " ${LIB_PATH} )
 FIND_PATH(GLEW_INCUDE_DIR NAMES GL/glew.h PATHS ${COMMON_DIR}/inc)
 if (WIN32)
   FIND_LIBRARY(GLEW_LIBRARY NAMES ${GLEW_NAME} PATHS ${LIB_PATH})
+  SET( GLEW_DLL ${LIB_PATH}/${GLEW_NAME}.dll )
 else (WIN32)
   FIND_LIBRARY(GLEW_LIBRARY NAMES ${GLEW_NAME} PATHS ${LIB_PATH})
 endif (WIN32)
@@ -74,6 +75,7 @@ MESSAGE( STATUS "GLEW_INCUDE_DIR = " ${GLEW_INCUDE_DIR} )
 FIND_PATH(FREEGLUT_INCLUDE_DIR NAMES GL/freeglut.h PATHS ${COMMON_DIR}/inc)
 if (WIN32)
   FIND_LIBRARY(FREEGLUT_LIBRARY NAMES freeglut PATHS ${LIB_PATH})
+  SET( GLUT_DLL ${LIB_PATH}/freeglut.dll )
 else (WIN32)
   FIND_LIBRARY(FREEGLUT_LIBRARY NAMES glut PATHS ${LIB_PATH})
 endif (WIN32)
@@ -148,17 +150,31 @@ if(BORLAND)
   message(STATUS "Compiler: BCC") 
 endif(BORLAND) 
 
-
-message(STATUS "CMake generates " ${CMAKE_GENERATOR})
-
 list(APPEND CMAKE_CXX_SOURCE_FILE_EXTENSIONS cu)
 
 set(GENCODE ${GENCODE} -gencode arch=compute_10,code=sm_10)
 # set(GENCODE ${GENCODE} -gencode arch=compute_20,code=sm_20 )
 #set(GENCODE ${GENCODE} -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(DDL_OUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_CFG_INTDIR})
+
+message(STATUS "CMake generates " ${CMAKE_GENERATOR})
+message(STATUS "BinDir	" ${CMAKE_CURRENT_BINARY_DIR})
+message(STATUS "dllDir	" ${DDL_OUT_DIR})
+
+
 CUDA_ADD_EXECUTABLE( ${PROJECT} ${SHGL_SRC}
 		     OPTIONS ${GENCODE} ${DEVICE_DEBUGGING})
 
 target_link_libraries(${PROJECT} ${GLEW_LIBRARY} ${FREEGLUT_LIBRARY} ${OPENGL_LIBRARIES})
 #${OPENGL_LIBRARIES}
+
+if (WIN32)
+	add_custom_command(TARGET ${PROJECT} POST_BUILD        # Adds a post-build event to MyTest
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
+			${GLEW_DLL}	${DDL_OUT_DIR})
+	add_custom_command(TARGET ${PROJECT} POST_BUILD        # Adds a post-build event to MyTest
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
+			${GLUT_DLL}	${DDL_OUT_DIR})
+endif(WIN32) 
