@@ -25,7 +25,14 @@
 //#include <string>
 
 #include "GLSlideShow.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <dirent.h>
 
+#include <vector>
+#include <string>
+#include <iostream>
+//using namespace std;
 
 //#include "initCUDA.h"
 
@@ -416,7 +423,43 @@
 
 int main(int argc, char **argv)
 {
-	Start(argc, argv);
+	struct dirent *dp;
+
+	// enter existing path to directory below
+	std::string dir_path = ".";
+	std::string extension = ".pgm";
+	if(argc > 1)
+		dir_path = argv[1];
+
+	dir_path.push_back('/');
+
+	DIR *dir = opendir(dir_path.data());
+	if(dir == NULL)
+		return 0;
+	std::vector<std::string> filesList;
+
+	while ((dp = readdir(dir)) != NULL) {
+		std::string file = dp->d_name;
+		if(file.find(extension) != std::string::npos){
+			file.insert(0, dir_path);
+			filesList.push_back(file);
+		}
+
+//		char *tmp;
+//		tmp = path_cat(dir_path, dp->d_name);
+
+//		free(tmp);
+//		tmp = NULL;
+	}
+	closedir(dir);
+
+	for (std::vector<std::string>::iterator it = filesList.begin(); it != filesList.end(); ++it)
+	    std::cout << ' ' << *it << std::endl;
+
+
+
+//	Start(argc, argv);
+
 
 //    pArgc = &argc;
 //    pArgv = argv;
