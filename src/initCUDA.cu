@@ -364,7 +364,7 @@ void SobelKernel::CopyToGPU(Image inputImgCPU, int pixSize){
 
 
 Pixel* SobelKernel::CallKernel(Pixel *outputBUFFER){
-	outputBufGpu = outputBUFFER;
+//	outputBufGpu = outputBUFFER;
 
 //	sobelFilter(outputBUFFER, outBufWidth, outBufHeight, sobelDisplayMode, imageScale);
 	checkCudaErrors(cudaMemcpyFromArray(outputBUFFER, array, 0,0, sizeof(Pixel)*inBufWidth*inBufHeight, cudaMemcpyDeviceToDevice));

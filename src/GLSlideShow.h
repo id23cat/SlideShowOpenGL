@@ -97,7 +97,7 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/);
 void reshape(int x, int y);
 void cleanup(void);
 void initializeData(/*char *file*/);
-void loadImage(/*char *loc_exec*/);
+void loadImage(char *loc_file);
 void initGL(int *argc, char **argv);
 //void runAutoTest(int argc, char *argv[]);
 

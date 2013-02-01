@@ -173,6 +173,7 @@ void timerEvent(int value)
 void keyboard(unsigned char key, int /*x*/, int /*y*/)
 {
     char temp[256];
+    char* file;
 
     switch (key)
     {
@@ -196,30 +197,51 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
         case 'i':
         case 'I':
             g_SobelDisplayMode = SOBELDISPLAY_IMAGE;
-            sprintf(temp, "CUDA Edge Detection (%s)", filterMode[g_SobelDisplayMode]);
+            sprintf(temp, "CUDA Sideshow (%s)", filterMode[g_SobelDisplayMode]);
             glutSetWindowTitle(temp);
             break;
 
         case 's':
         case 'S':
             g_SobelDisplayMode = SOBELDISPLAY_SOBELSHARED;
-            sprintf(temp, "CUDA Edge Detection (%s)", filterMode[g_SobelDisplayMode]);
+            sprintf(temp, "CUDA Sideshow (%s)", filterMode[g_SobelDisplayMode]);
             glutSetWindowTitle(temp);
             break;
 
         case 't':
         case 'T':
             g_SobelDisplayMode = SOBELDISPLAY_SOBELTEX;
-            sprintf(temp, "CUDA Edge Detection (%s)", filterMode[g_SobelDisplayMode]);
+            sprintf(temp, "CUDA Sideshow (%s)", filterMode[g_SobelDisplayMode]);
             glutSetWindowTitle(temp);
             break;
 
         case 'k':
         case 'K':
-        	sprintf(temp, "CUDA Edge Detection (%s)",
-        			(*files)[0].data());
-        	glutSetWindowTitle((*files)[0].data());
-//        	loadImage();
+        	file = (char*)(*files)[1].data();
+        	sprintf(temp, "CUDA Sideshow (%s)",
+        			file);
+        	glutSetWindowTitle(file);
+
+        	loadImage(file);
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
+			glBufferData(GL_PIXEL_UNPACK_BUFFER,
+					g_Bpp * sizeof(Pixel) * imWidth * imHeight, pixels,
+					GL_STREAM_DRAW);
+			GLint bsize;
+			glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
+
+			if ((GLuint) bsize != (g_Bpp * sizeof(Pixel) * imWidth * imHeight)) {
+				printf("Buffer object (%d) has incorrect size (%d).\n",
+						(unsigned) pbo_buffer, (unsigned) bsize);
+				cudaDeviceReset();
+				exit(EXIT_FAILURE);
+			}
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+			glBindTexture(GL_TEXTURE_2D, texid);
+			glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_BGRA),
+					imWidth, imHeight, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+			glBindTexture(GL_TEXTURE_2D, 0);
+
         	break;
 
         default:
@@ -255,7 +277,7 @@ void initializeData(/*char *file*/)
 {
 	GLint bsize;
 	sobelKernel = new SobelKernel();
-	loadImage();
+	loadImage((char*)(*files)[0].data());
 
 //    setupTexture(imWidth, imHeight, pixels, g_Bpp);
 //    sobelKernel->CopyToGPU(Image(pixels, imWidth, imHeight), g_Bpp);
@@ -296,15 +318,16 @@ void initializeData(/*char *file*/)
 	}
 }
 
-void loadImage(/*char *loc_exec*/)
+void loadImage(char *loc_file)
 {
-	const char *file = (*files)[0].data();
+//	const char *file = (*files)[0].data();
 	unsigned int w, h;
-	size_t file_length = strlen(file);
+	size_t file_length = strlen(loc_file);
+	printf("Loading image %s...\n", loc_file);
 
 	g_Bpp = 1;
-	if (sdkLoadPGM<unsigned char>(file, &pixels, &w, &h) != true) {
-		printf("Failed to load PGM image file: %s\n", file);
+	if (sdkLoadPGM<unsigned char>(loc_file, &pixels, &w, &h) != true) {
+		printf("Failed to load PGM image file: %s\n", loc_file);
 		exit(EXIT_FAILURE);
 	}
 
