@@ -342,7 +342,7 @@ void SobelKernel::SetPropeties(enum SobelDisplayMode mode, float fScale){
 	imageScale = fScale;
 }
 
-void SobelKernel::CopyToGPU(Image inputImgCPU, int pixSize){
+void SobelKernel::CopyToGPU(Image inputImgCPU){
 //	if (pixSize == 1) {
 //		desc = cudaCreateChannelDesc<unsigned char>();
 //	} else {
@@ -357,6 +357,8 @@ void SobelKernel::CopyToGPU(Image inputImgCPU, int pixSize){
 		checkCudaErrors(cudaFreeArray(array));
 		array = NULL;
 	}
+	printf("Alocate memory %dx%d\n", inBufWidth, inBufHeight);
+
 	checkCudaErrors(cudaMallocArray(&array, &desc, inBufWidth, inBufHeight));
 	checkCudaErrors(cudaMemcpyToArray(array, 0, 0, inputImgCPU.data,
 			sizeof(Pixel)*inBufWidth*inBufHeight, cudaMemcpyHostToDevice));

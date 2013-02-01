@@ -8,7 +8,7 @@
 #include "GLSlideShow.h"
 #include "initCUDA.h"
 
-SobelKernel *sobelKernel;
+AbstractKernel *processKernel;
 
 const char *filterMode[] =
 {
@@ -41,6 +41,7 @@ char **pArgv = NULL;
 float imageScale = 1.f;        // Image exposure
 
 std::vector<std::string> *files;
+std::vector<std::string>::iterator fileit;
 
 void computeFPS()
 {
@@ -77,7 +78,7 @@ void display(void)
     //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
 
 //    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
-    sobelKernel->CallKernel(data);
+    processKernel->CallKernel(data);
 
     checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
 
@@ -174,6 +175,7 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
 {
     char temp[256];
     char* file;
+    GLint bsize;
 
     switch (key)
     {
@@ -184,40 +186,43 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
             exit(EXIT_SUCCESS);
             break;
 
-        case '-':
-            imageScale -= 0.1f;
-            printf("brightness = %4.2f\n", imageScale);
-            break;
+		case 'p':
+		case 'P':
+			if (fileit == files->begin())
+				fileit = (files->end());
+			--fileit;
+			file = (char*) (*fileit).data();
 
-        case '=':
-            imageScale += 0.1f;
-            printf("brightness = %4.2f\n", imageScale);
-            break;
+			sprintf(temp, "CUDA Sideshow (%s)", file);
+			glutSetWindowTitle(file);
 
-        case 'i':
-        case 'I':
-            g_SobelDisplayMode = SOBELDISPLAY_IMAGE;
-            sprintf(temp, "CUDA Sideshow (%s)", filterMode[g_SobelDisplayMode]);
-            glutSetWindowTitle(temp);
-            break;
+			loadImage(file);
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
+			glBufferData(GL_PIXEL_UNPACK_BUFFER,
+					g_Bpp * sizeof(Pixel) * imWidth * imHeight, pixels,
+					GL_STREAM_DRAW);
 
-        case 's':
-        case 'S':
-            g_SobelDisplayMode = SOBELDISPLAY_SOBELSHARED;
-            sprintf(temp, "CUDA Sideshow (%s)", filterMode[g_SobelDisplayMode]);
-            glutSetWindowTitle(temp);
-            break;
+			glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
 
-        case 't':
-        case 'T':
-            g_SobelDisplayMode = SOBELDISPLAY_SOBELTEX;
-            sprintf(temp, "CUDA Sideshow (%s)", filterMode[g_SobelDisplayMode]);
-            glutSetWindowTitle(temp);
-            break;
+			if ((GLuint) bsize != (g_Bpp * sizeof(Pixel) * imWidth * imHeight)) {
+				printf("Buffer object (%d) has incorrect size (%d).\n",
+						(unsigned) pbo_buffer, (unsigned) bsize);
+				cudaDeviceReset();
+				exit(EXIT_FAILURE);
+			}
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+			glBindTexture(GL_TEXTURE_2D, texid);
+			glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_BGRA),
+					imWidth, imHeight, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+			glBindTexture(GL_TEXTURE_2D, 0);
 
-        case 'k':
-        case 'K':
-        	file = (char*)(*files)[1].data();
+			break;
+
+        case 'n':
+        case 'N':
+        	if(++fileit == files->end())
+        		fileit = files->begin();
+        	file = (char*)(*fileit).data();
         	sprintf(temp, "CUDA Sideshow (%s)",
         			file);
         	glutSetWindowTitle(file);
@@ -227,7 +232,7 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
 			glBufferData(GL_PIXEL_UNPACK_BUFFER,
 					g_Bpp * sizeof(Pixel) * imWidth * imHeight, pixels,
 					GL_STREAM_DRAW);
-			GLint bsize;
+
 			glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
 
 			if ((GLuint) bsize != (g_Bpp * sizeof(Pixel) * imWidth * imHeight)) {
@@ -247,7 +252,7 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
         default:
             break;
     }
-    sobelKernel->SetPropeties(g_SobelDisplayMode, imageScale);
+//    processKernel->SetPropeties(g_SobelDisplayMode, imageScale);
 }
 
 void reshape(int x, int y)
@@ -268,7 +273,7 @@ void cleanup(void)
     glDeleteBuffers(1, &pbo_buffer);
     glDeleteTextures(1, &texid);
 //    deleteTexture();
-    delete sobelKernel;
+    delete processKernel;
 
     sdkDeleteTimer(&timer);
 }
@@ -276,8 +281,8 @@ void cleanup(void)
 void initializeData(/*char *file*/)
 {
 	GLint bsize;
-	sobelKernel = new SobelKernel();
-	loadImage((char*)(*files)[0].data());
+
+	loadImage((char*)(*fileit).data());
 
 //    setupTexture(imWidth, imHeight, pixels, g_Bpp);
 //    sobelKernel->CopyToGPU(Image(pixels, imWidth, imHeight), g_Bpp);
@@ -326,6 +331,11 @@ void loadImage(char *loc_file)
 	printf("Loading image %s...\n", loc_file);
 
 	g_Bpp = 1;
+	if(pixels != NULL){
+		free(pixels);
+		pixels = NULL;
+	}
+
 	if (sdkLoadPGM<unsigned char>(loc_file, &pixels, &w, &h) != true) {
 		printf("Failed to load PGM image file: %s\n", loc_file);
 		exit(EXIT_FAILURE);
@@ -360,14 +370,14 @@ void loadImage(char *loc_file)
 	imWidth = (int) w;
 	imHeight = (int) h;
 
-//    sobelKernel = new SobelKernel();
-    sobelKernel->CopyToGPU(Image(pixels, imWidth, imHeight), g_Bpp);
+	printf("ANew image %dx%d\n", imWidth, imHeight);
+//    processKernel = new SobelKernel();
+    processKernel->CopyToGPU(Image(pixels, imWidth, imHeight));
 
 }
 
 
-void initGL(int *argc, char **argv)
-{
+void initGL(int *argc, char **argv){
     glutInit(argc, argv);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
     glutInitWindowSize(wWidth, wHeight);
@@ -430,15 +440,17 @@ void Start(int argc, char **argv, std::vector<std::string> fileList){
 	glutReshapeFunc(reshape);
 
 	files = &fileList;
+	fileit = files->begin();
+
+	processKernel = new SobelKernel();	// creat SobelKernel
 	initializeData();
 
 //	loadImage(argv[0]);
 
 	// If code is not printing the USage, then we execute this path.
-	printf("I: display Image (no filtering)\n");
-	printf("T: display Sobel Edge Detection (Using Texture)\n");
-	printf("S: display Sobel Edge Detection (Using SMEM+Texture)\n");
-	printf("Use the '-' and '=' keys to change the brightness.\n");
+	printf("N: next image\n");
+	printf("P: previous image\n");
+	printf("Esc or Q: exit\n");
 	fflush(stdout);
 	atexit(cleanup);
 	glutTimerFunc(REFRESH_DELAY, timerEvent, 0);

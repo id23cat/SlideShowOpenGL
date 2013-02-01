@@ -51,8 +51,8 @@ public:
 	AbstractKernel();
 	virtual ~AbstractKernel();
 
-	void CopyToGPU(Image inputImgCPU);
-	void CopyFromGPU(Image *outputImgCPU);
+	virtual void CopyToGPU(Image inputImgCPU);
+	virtual void CopyFromGPU(Image *outputImgCPU);
 	void SetDevice(int dev);
 //	virtual Pixel* CallKernel(size_t *imWidth, size_t *imHeight)=0; // must return outputBufGpu;
 	virtual Pixel* CallKernel(Pixel *outputBUFFER)=0;	// must return outputBufGpu;
@@ -72,7 +72,7 @@ public:
 	SobelKernel();
 	~SobelKernel();
 	void SetPropeties(enum SobelDisplayMode mode, float fScale);
-	void CopyToGPU(Image inputImgCPU, int pixSize=1);
+	virtual void CopyToGPU(Image inputImgCPU);
 	Pixel* CallKernel(Pixel *outputBUFFER);
 };
 

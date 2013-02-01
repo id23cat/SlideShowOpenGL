@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef WIN32
-#include "common/inc/dirent.h"
+#include "../common/inc/dirent.h"
 #else //WIN32
 #include </usr/include/dirent.h>
 #endif
