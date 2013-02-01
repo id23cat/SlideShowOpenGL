@@ -56,6 +56,7 @@ static int wWidth   = 512; // Window width
 static int wHeight  = 512; // Window height
 static int imWidth  = 0;   // Image width
 static int imHeight = 0;   // Image height
+static int imPitch = 0;
 
 // Code to handle Auto verification
 const int frameCheckNumber = 4;

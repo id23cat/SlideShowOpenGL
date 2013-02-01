@@ -370,9 +370,14 @@ void loadImage(char *loc_file)
 	imWidth = (int) w;
 	imHeight = (int) h;
 
-	printf("ANew image %dx%d\n", imWidth, imHeight);
+	printf("Source image %dx%d\n", imWidth, imHeight);
 //    processKernel = new SobelKernel();
     processKernel->CopyToGPU(Image(pixels, imWidth, imHeight));
+
+    static_cast<PitchKernel*>(processKernel)->GetActualSize(&imWidth, &imHeight, &imPitch);
+
+    imWidth = imPitch;
+    printf("Result image %dx%d\n", imWidth, imHeight);
 
 }
 
@@ -442,7 +447,8 @@ void Start(int argc, char **argv, std::vector<std::string> fileList){
 	files = &fileList;
 	fileit = files->begin();
 
-	processKernel = new SobelKernel();	// creat SobelKernel
+//	processKernel = new SobelKernel();	// creat SobelKernel
+	processKernel = new PitchKernel();	// creat SobelKernel
 	initializeData();
 
 //	loadImage(argv[0]);

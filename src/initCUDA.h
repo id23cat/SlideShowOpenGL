@@ -87,4 +87,12 @@ public:
 
 };
 
+class PitchKernel: public AbstractKernel{
+	size_t imPitch;
+public:
+	PitchKernel();
+	void GetActualSize(int *width, int *height, int *pitch);
+	void CopyToGPU(Image inputImgCPU);
+	Pixel* CallKernel(Pixel *outputBUFFER);
+};
 #endif /* INITCUDA_H_ */

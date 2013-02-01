@@ -370,7 +370,7 @@ Pixel* SobelKernel::CallKernel(Pixel *outputBUFFER){
 
 //	sobelFilter(outputBUFFER, outBufWidth, outBufHeight, sobelDisplayMode, imageScale);
 	checkCudaErrors(cudaMemcpyFromArray(outputBUFFER, array, 0,0, sizeof(Pixel)*inBufWidth*inBufHeight, cudaMemcpyDeviceToDevice));
-	return outputBufGpu;
+	return outputBUFFER;
 }
 
 /********************************* MalvarKernel ***********************************************************/
@@ -382,12 +382,48 @@ void MalvarKernel::CopyToGPU(Image inputImgCPU){
 	cudaSetDeviceFlags(cudaDeviceMapHost);
 	dimBlock = dim3(128);
 	dimGrid = dim3((inputImgCPU.w-4 + BLOCKX - 1) / BLOCKX, (inputImgCPU.h - 4 + BLOCKY - 1) /BLOCKY);
-
-
-
 }
 
 Pixel* MalvarKernel::CallKernel(Pixel *outputBUFFER){
 
 	return outputBufGpu;
+}
+
+/********************************* MalvarKernel ***********************************************************/
+PitchKernel::PitchKernel(){
+	imPitch = 100;
+}
+
+void PitchKernel::CopyToGPU(Image inputImgCPU){
+	inBufWidth = inputImgCPU.w;
+	imPitch += inBufWidth;
+	inBufHeight = inputImgCPU.h;
+
+	if (inputBufGpu != NULL) {
+		checkCudaErrors(cudaFree(inputBufGpu));
+		inputBufGpu = NULL;
+	}
+	printf("Alocate memory %dx%d\n", inBufWidth, inBufHeight);
+	checkCudaErrors(cudaMalloc(&inputBufGpu, inBufHeight*(inBufWidth + imPitch)*sizeof(Pixel)));
+//	for(int i=0; i < inBufHeight; i++){
+		checkCudaErrors(cudaMemcpy2D( inputBufGpu, imPitch,
+				inputImgCPU.data, inputImgCPU.w,
+				inBufWidth, inBufHeight,
+				cudaMemcpyHostToDevice ));
+//	}
+}
+
+void PitchKernel::GetActualSize(int *width, int *height, int *pitch){
+	*width = inBufWidth;
+	*height = inBufHeight;
+	*pitch = imPitch;
+}
+
+Pixel* PitchKernel::CallKernel(Pixel *outputBUFFER){
+	checkCudaErrors(cudaMemcpy2D( outputBUFFER, imPitch,
+			inputBufGpu, imPitch,
+			inBufWidth, inBufHeight,
+			cudaMemcpyHostToDevice ));
+
+	return outputBUFFER;
 }
