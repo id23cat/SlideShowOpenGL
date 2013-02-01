@@ -27,7 +27,7 @@ extern enum SobelDisplayMode g_SobelDisplayMode;
 
 extern "C" void sobelFilter(Pixel *odata, int iw, int ih,
 		enum SobelDisplayMode mode, float fScale);
-extern "C" void setupTexture(int iw, int ih, Pixel *data, int Bpp);
+//extern "C" void setupTexture(int iw, int ih, Pixel *data, int Bpp);
 extern "C" void deleteTexture(void);
 extern "C" void initFilter(void);
 
@@ -66,6 +66,7 @@ class SobelKernel: public AbstractKernel{
 //	cudaArray *array;
 	enum SobelDisplayMode sobelDisplayMode;
 	float imageScale;	// Image exposure
+	cudaChannelFormatDesc desc;
 
 public:
 	SobelKernel();

@@ -426,6 +426,9 @@ int main(int argc, char **argv)
 	struct dirent *dp;
 
 	// enter existing path to directory below
+
+	std::cout << "Alowed only .pgm files" << std::endl;
+
 	std::string dir_path = ".";
 	std::string extension = ".pgm";
 	if(argc > 1)
@@ -444,21 +447,18 @@ int main(int argc, char **argv)
 			file.insert(0, dir_path);
 			filesList.push_back(file);
 		}
-
-//		char *tmp;
-//		tmp = path_cat(dir_path, dp->d_name);
-
-//		free(tmp);
-//		tmp = NULL;
 	}
 	closedir(dir);
+
+	if(filesList.empty()){
+		std::cerr << "No .pgm files foud";
+		return 0;
+	}
 
 	for (std::vector<std::string>::iterator it = filesList.begin(); it != filesList.end(); ++it)
 	    std::cout << ' ' << *it << std::endl;
 
-
-
-//	Start(argc, argv);
+	Start(argc, argv, filesList);
 
 
 //    pArgc = &argc;

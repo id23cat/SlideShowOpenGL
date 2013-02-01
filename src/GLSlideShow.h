@@ -22,8 +22,9 @@
 // Includes
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
+//#include <string.h>
 
+#include <vector>
 #include <string>
 
 // includes, project
@@ -95,12 +96,12 @@ void timerEvent(int value);
 void keyboard(unsigned char key, int /*x*/, int /*y*/);
 void reshape(int x, int y);
 void cleanup(void);
-void initializeData(char *file);
-void loadDefaultImage(char *loc_exec);
+void initializeData(/*char *file*/);
+void loadImage(/*char *loc_exec*/);
 void initGL(int *argc, char **argv);
-void runAutoTest(int argc, char *argv[]);
+//void runAutoTest(int argc, char *argv[]);
 
-void Start(int argc, char **argv);
+void Start(int argc, char **argv, std::vector<std::string> fileList);
 
 //#include <GL/glew.h>
 //#if defined(__APPLE__) || defined(MACOSX)

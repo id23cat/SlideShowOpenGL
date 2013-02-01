@@ -202,22 +202,22 @@ SobelTex(Pixel *pSobelOriginal, unsigned int Pitch,
     }
 }
 
-extern "C" void setupTexture(int iw, int ih, Pixel *data, int Bpp)
-{
-    cudaChannelFormatDesc desc;
-
-    if (Bpp == 1)
-    {
-        desc = cudaCreateChannelDesc<unsigned char>();
-    }
-    else
-    {
-        desc = cudaCreateChannelDesc<uchar4>();
-    }
-
-    checkCudaErrors(cudaMallocArray(&array, &desc, iw, ih));
-    checkCudaErrors(cudaMemcpyToArray(array, 0, 0, data, Bpp*sizeof(Pixel)*iw*ih, cudaMemcpyHostToDevice));
-}
+//extern "C" void setupTexture(int iw, int ih, Pixel *data, int Bpp)
+//{
+//    cudaChannelFormatDesc desc;
+//
+//    if (Bpp == 1)
+//    {
+//        desc = cudaCreateChannelDesc<unsigned char>();
+//    }
+//    else
+//    {
+//        desc = cudaCreateChannelDesc<uchar4>();
+//    }
+//
+//    checkCudaErrors(cudaMallocArray(&array, &desc, iw, ih));
+//    checkCudaErrors(cudaMemcpyToArray(array, 0, 0, data, Bpp*sizeof(Pixel)*iw*ih, cudaMemcpyHostToDevice));
+//}
 
 extern "C" void deleteTexture(void)
 {
@@ -329,9 +329,9 @@ void AbstractKernel::CopyFromGPU(Image *outputImgCPU){
 }
 
 /********************************* SobelKernel ***********************************************************/
-SobelKernel::SobelKernel()//:
-//	array(NULL)
-{}
+SobelKernel::SobelKernel(){
+	desc = cudaCreateChannelDesc<unsigned char>();
+}
 
 SobelKernel::~SobelKernel(){
 	deleteTexture();
@@ -351,13 +351,23 @@ void SobelKernel::CopyToGPU(Image inputImgCPU, int pixSize){
 //	checkCudaErrors(cudaMallocArray(&array, &desc, iw, ih));
 //	checkCudaErrors(cudaMemcpyToArray(array, 0, 0, data, Bpp*sizeof(Pixel)*iw*ih, cudaMemcpyHostToDevice));
 	inBufWidth = outBufWidth = inputImgCPU.w;
-	inBufWidth = outBufHeight = inputImgCPU.h;
-	setupTexture(inputImgCPU.w, inputImgCPU.h, inputImgCPU.data, pixSize);
+	inBufHeight = outBufHeight = inputImgCPU.h;
+//	setupTexture(inputImgCPU.w, inputImgCPU.h, inputImgCPU.data, pixSize);
+	if(array != NULL){
+		checkCudaErrors(cudaFreeArray(array));
+		array = NULL;
+	}
+	checkCudaErrors(cudaMallocArray(&array, &desc, inBufWidth, inBufHeight));
+	checkCudaErrors(cudaMemcpyToArray(array, 0, 0, inputImgCPU.data,
+			sizeof(Pixel)*inBufWidth*inBufHeight, cudaMemcpyHostToDevice));
 }
 
+
 Pixel* SobelKernel::CallKernel(Pixel *outputBUFFER){
-//	outputBufGpu = outputBUFFER;
-	sobelFilter(outputBUFFER, outBufWidth, outBufHeight, sobelDisplayMode, imageScale);
+	outputBufGpu = outputBUFFER;
+
+//	sobelFilter(outputBUFFER, outBufWidth, outBufHeight, sobelDisplayMode, imageScale);
+	checkCudaErrors(cudaMemcpyFromArray(outputBUFFER, array, 0,0, sizeof(Pixel)*inBufWidth*inBufHeight, cudaMemcpyDeviceToDevice));
 	return outputBufGpu;
 }
 

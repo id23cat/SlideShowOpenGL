@@ -18,7 +18,7 @@ const char *filterMode[] =
     NULL
 };
 
-const char *SlideShowSample = "CUDA Sobel Edge-Detection";
+const char *SlideShowSample = "Slideshow";
 
 enum SobelDisplayMode g_SobelDisplayMode;
 
@@ -40,6 +40,7 @@ int *pArgc   = NULL;
 char **pArgv = NULL;
 float imageScale = 1.f;        // Image exposure
 
+std::vector<std::string> *files;
 
 void computeFPS()
 {
@@ -213,6 +214,14 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
             glutSetWindowTitle(temp);
             break;
 
+        case 'k':
+        case 'K':
+        	sprintf(temp, "CUDA Edge Detection (%s)",
+        			(*files)[0].data());
+        	glutSetWindowTitle((*files)[0].data());
+//        	loadImage();
+        	break;
+
         default:
             break;
     }
@@ -242,95 +251,95 @@ void cleanup(void)
     sdkDeleteTimer(&timer);
 }
 
-void initializeData(char *file)
+void initializeData(/*char *file*/)
 {
-    GLint bsize;
-    unsigned int w, h;
-    size_t file_length= strlen(file);
+	GLint bsize;
+	sobelKernel = new SobelKernel();
+	loadImage();
 
-    if (!strcmp(&file[file_length-3], "pgm"))
-    {
-        if (sdkLoadPGM<unsigned char>(file, &pixels, &w, &h) != true)
-        {
-            printf("Failed to load PGM image file: %s\n", file);
-            exit(EXIT_FAILURE);
-        }
-
-        g_Bpp = 1;
-    }
-    else if (!strcmp(&file[file_length-3], "ppm"))
-    {
-        if (sdkLoadPPM4(file, &pixels, &w, &h) != true)
-        {
-            printf("Failed to load PPM image file: %s\n", file);
-            exit(EXIT_FAILURE);
-        }
-
-        g_Bpp = 4;
-    }
-    else
-    {
-        cudaDeviceReset();
-        exit(EXIT_FAILURE);
-    }
-
-    imWidth = (int)w;
-    imHeight = (int)h;
 //    setupTexture(imWidth, imHeight, pixels, g_Bpp);
-    sobelKernel = new SobelKernel();
-    sobelKernel->CopyToGPU(Image(pixels, imWidth, imHeight), g_Bpp);
+//    sobelKernel->CopyToGPU(Image(pixels, imWidth, imHeight), g_Bpp);
 
     memset(pixels, 0x0, g_Bpp * sizeof(Pixel) * imWidth * imHeight);
 
-    if (!g_bQAReadback)
-    {
-        // use OpenGL Path
-        glGenBuffers(1, &pbo_buffer);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER,
-                     g_Bpp * sizeof(Pixel) * imWidth * imHeight,
-                     pixels, GL_STREAM_DRAW);
+	if (!g_bQAReadback) {
+		// use OpenGL Path
+		glGenBuffers(1, &pbo_buffer);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
+		glBufferData(GL_PIXEL_UNPACK_BUFFER,
+				g_Bpp * sizeof(Pixel) * imWidth * imHeight, pixels,
+				GL_STREAM_DRAW);
 
-        glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
+		glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
 
-        if ((GLuint)bsize != (g_Bpp * sizeof(Pixel) * imWidth * imHeight))
-        {
-            printf("Buffer object (%d) has incorrect size (%d).\n", (unsigned)pbo_buffer, (unsigned)bsize);
-            cudaDeviceReset();
-            exit(EXIT_FAILURE);
-        }
+		if ((GLuint) bsize != (g_Bpp * sizeof(Pixel) * imWidth * imHeight)) {
+			printf("Buffer object (%d) has incorrect size (%d).\n",
+					(unsigned) pbo_buffer, (unsigned) bsize);
+			cudaDeviceReset();
+			exit(EXIT_FAILURE);
+		}
 
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-        // register this buffer object with CUDA
-        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo_buffer, cudaGraphicsMapFlagsWriteDiscard));
+		// register this buffer object with CUDA
+		checkCudaErrors(
+				cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo_buffer, cudaGraphicsMapFlagsWriteDiscard));
 
-        glGenTextures(1, &texid);
-        glBindTexture(GL_TEXTURE_2D, texid);
-        glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp==1) ? GL_LUMINANCE : GL_BGRA),
-                     imWidth, imHeight,  0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
-        glBindTexture(GL_TEXTURE_2D, 0);
+		glGenTextures(1, &texid);
+		glBindTexture(GL_TEXTURE_2D, texid);
+		glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_BGRA),
+				imWidth, imHeight, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+		glBindTexture(GL_TEXTURE_2D, 0);
 
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    }
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	}
 }
 
-void loadDefaultImage(char *loc_exec)
+void loadImage(/*char *loc_exec*/)
 {
+	const char *file = (*files)[0].data();
+	unsigned int w, h;
+	size_t file_length = strlen(file);
 
-    printf("Reading image: lena.pgm\n");
-    const char *image_filename = "lena.pgm";
-    char *image_path = sdkFindFilePath(image_filename, loc_exec);
+	g_Bpp = 1;
+	if (sdkLoadPGM<unsigned char>(file, &pixels, &w, &h) != true) {
+		printf("Failed to load PGM image file: %s\n", file);
+		exit(EXIT_FAILURE);
+	}
 
-    if (image_path == NULL)
-    {
-        printf("Failed to read image file: <%s>\n", image_filename);
-        exit(EXIT_FAILURE);
-    }
+	//    if (!strcmp(&file[file_length-3], "pgm"))
+	//    {
+	//        if (sdkLoadPGM<unsigned char>(file, &pixels, &w, &h) != true)
+	//        {
+	//            printf("Failed to load PGM image file: %s\n", file);
+	//            exit(EXIT_FAILURE);
+	//        }
+	//
+	//        g_Bpp = 1;
+	//    }
+	//    else if (!strcmp(&file[file_length-3], "ppm"))
+	//    {
+	//        if (sdkLoadPPM4(file, &pixels, &w, &h) != true)
+	//        {
+	//            printf("Failed to load PPM image file: %s\n", file);
+	//            exit(EXIT_FAILURE);
+	//        }
+	//
+	//        g_Bpp = 4;
+	//    }
+	//    else
+	//    {
+	//        cudaDeviceReset();
+	//        exit(EXIT_FAILURE);
+	//    }
 
-    initializeData(image_path);
-    free(image_path);
+	imWidth = (int) w;
+	imHeight = (int) h;
+
+//    sobelKernel = new SobelKernel();
+    sobelKernel->CopyToGPU(Image(pixels, imWidth, imHeight), g_Bpp);
+
 }
 
 
@@ -354,98 +363,36 @@ void initGL(int *argc, char **argv)
     }
 }
 
-void runAutoTest(int argc, char *argv[])
-{
-    printf("[%s] (automated testing w/ readback)\n", SlideShowSample);
-    int devID = findCudaDevice(argc, (const char **)argv);
 
-    loadDefaultImage(argv[0]);
-
-    Pixel *d_result;
-    checkCudaErrors(cudaMalloc((void **)&d_result, imWidth*imHeight*sizeof(Pixel)));
-
-    char *ref_file = NULL;
-    char  dump_file[256];
-
-    int mode = 0;
-    mode = getCmdLineArgumentInt(argc, (const char **)argv, "mode");
-    getCmdLineArgumentString(argc, (const char **)argv, "file", &ref_file);
-
-    switch (mode)
-    {
-    case 0:
-        g_SobelDisplayMode = SOBELDISPLAY_IMAGE;
-        sprintf(dump_file, "lena_orig.pgm");
-        break;
-    case 1:
-        g_SobelDisplayMode = SOBELDISPLAY_SOBELTEX;
-        sprintf(dump_file, "lena_tex.pgm");
-        break;
-    case 2:
-        g_SobelDisplayMode = SOBELDISPLAY_SOBELSHARED;
-        sprintf(dump_file, "lena_shared.pgm");
-        break;
-    default:
-        printf("Invalid Filter Mode File\n");
-        exit(EXIT_FAILURE);
-        break;
-    }
-
-    printf("AutoTest: %s <%s>\n", SlideShowSample, filterMode[g_SobelDisplayMode]);
-    sobelFilter(d_result, imWidth, imHeight, g_SobelDisplayMode, imageScale);
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    unsigned char *h_result = (unsigned char *)malloc(imWidth*imHeight*sizeof(Pixel));
-    checkCudaErrors(cudaMemcpy(h_result, d_result, imWidth*imHeight*sizeof(Pixel), cudaMemcpyDeviceToHost));
-    sdkSavePGM(dump_file, h_result, imWidth, imHeight);
-
-    if (!sdkComparePGM(dump_file, sdkFindFilePath(ref_file, argv[0]), MAX_EPSILON_ERROR, 0.15f, false))
-    {
-        g_TotalErrors++;
-    }
-
-    checkCudaErrors(cudaFree(d_result));
-    free(h_result);
-
-    if (g_TotalErrors != 0)
-    {
-        printf("Test failed!\n");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Test passed!\n");
-    exit(EXIT_SUCCESS);
-}
-
-void Start(int argc, char **argv){
+void Start(int argc, char **argv, std::vector<std::string> fileList){
 	pArgc = &argc;
 	pArgv = argv;
 
 	printf("%s Starting...\n\n", SlideShowSample);
 
-	if (checkCmdLineFlag(argc, (const char **) argv, "help")) {
-		printf("\nUsage: SobelFilter <options>\n");
-		printf("\t\t-mode=n (0=original, 1=texture, 2=smem + texture)\n");
-		printf("\t\t-file=ref_orig.pgm (ref_tex.pgm, ref_shared.pgm)\n\n");
-		exit(EXIT_SUCCESS);
-	}
-
-	if (checkCmdLineFlag(argc, (const char **) argv, "file")) {
-		g_bQAReadback = true;
-		runAutoTest(argc, argv);
-	}
-
-	// use command-line specified CUDA device, otherwise use device with highest Gflops/s
-	if (checkCmdLineFlag(argc, (const char **) argv, "device")) {
-		printf(
-				"   This SDK does not explicitly support -device=n when running with OpenGL.\n");
-		printf(
-				"   When specifying -device=n (n=0,1,2,....) the sample must not use OpenGL.\n");
-		printf("   See details below to run without OpenGL:\n\n");
-		printf(" > %s -device=n\n\n", argv[0]);
-		printf("exiting...\n");
-		exit(EXIT_SUCCESS);
-	}
+//	if (checkCmdLineFlag(argc, (const char **) argv, "help")) {
+//		printf("\nUsage: SobelFilter <options>\n");
+//		printf("\t\t-mode=n (0=original, 1=texture, 2=smem + texture)\n");
+//		printf("\t\t-file=ref_orig.pgm (ref_tex.pgm, ref_shared.pgm)\n\n");
+//		exit(EXIT_SUCCESS);
+//	}
+//
+//	if (checkCmdLineFlag(argc, (const char **) argv, "file")) {
+//		g_bQAReadback = true;
+//		runAutoTest(argc, argv);
+//	}
+//
+//	// use command-line specified CUDA device, otherwise use device with highest Gflops/s
+//	if (checkCmdLineFlag(argc, (const char **) argv, "device")) {
+//		printf(
+//				"   This SDK does not explicitly support -device=n when running with OpenGL.\n");
+//		printf(
+//				"   When specifying -device=n (n=0,1,2,....) the sample must not use OpenGL.\n");
+//		printf("   See details below to run without OpenGL:\n\n");
+//		printf(" > %s -device=n\n\n", argv[0]);
+//		printf("exiting...\n");
+//		exit(EXIT_SUCCESS);
+//	}
 
 	// First initialize OpenGL context, so we can properly set the GL for CUDA.
 	// This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
@@ -459,7 +406,10 @@ void Start(int argc, char **argv){
 	glutKeyboardFunc(keyboard);
 	glutReshapeFunc(reshape);
 
-	loadDefaultImage(argv[0]);
+	files = &fileList;
+	initializeData();
+
+//	loadImage(argv[0]);
 
 	// If code is not printing the USage, then we execute this path.
 	printf("I: display Image (no filtering)\n");
