@@ -287,14 +287,14 @@ void initializeData(/*char *file*/)
 //    setupTexture(imWidth, imHeight, pixels, g_Bpp);
 //    sobelKernel->CopyToGPU(Image(pixels, imWidth, imHeight), g_Bpp);
 
-    memset(pixels, 0x0, g_Bpp * sizeof(Pixel) * imWidth * imHeight);
+//    memset(pixels, 0x0, g_Bpp * sizeof(Pixel) * imWidth * imHeight);
 
 	if (!g_bQAReadback) {
 		// use OpenGL Path
 		glGenBuffers(1, &pbo_buffer);
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
 		glBufferData(GL_PIXEL_UNPACK_BUFFER,
-				g_Bpp * sizeof(Pixel) * imWidth * imHeight, pixels,
+				g_Bpp * sizeof(Pixel) * imWidth * imHeight, NULL/*pixels*/,
 				GL_STREAM_DRAW);
 
 		glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
@@ -340,32 +340,32 @@ void loadImage(char *loc_file)
 		printf("Failed to load PGM image file: %s\n", loc_file);
 		exit(EXIT_FAILURE);
 	}
-
-	//    if (!strcmp(&file[file_length-3], "pgm"))
-	//    {
-	//        if (sdkLoadPGM<unsigned char>(file, &pixels, &w, &h) != true)
-	//        {
-	//            printf("Failed to load PGM image file: %s\n", file);
-	//            exit(EXIT_FAILURE);
-	//        }
-	//
-	//        g_Bpp = 1;
-	//    }
-	//    else if (!strcmp(&file[file_length-3], "ppm"))
-	//    {
-	//        if (sdkLoadPPM4(file, &pixels, &w, &h) != true)
-	//        {
-	//            printf("Failed to load PPM image file: %s\n", file);
-	//            exit(EXIT_FAILURE);
-	//        }
-	//
-	//        g_Bpp = 4;
-	//    }
-	//    else
-	//    {
-	//        cudaDeviceReset();
-	//        exit(EXIT_FAILURE);
-	//    }
+//
+//	    if (!strcmp(&file[file_length-3], "pgm"))
+//	    {
+//	        if (sdkLoadPGM<unsigned char>(file, &pixels, &w, &h) != true)
+//	        {
+//	            printf("Failed to load PGM image file: %s\n", file);
+//	            exit(EXIT_FAILURE);
+//	        }
+//
+//	        g_Bpp = 1;
+//	    }
+//	    else if (!strcmp(&file[file_length-3], "ppm"))
+//	    {
+//	        if (sdkLoadPPM4(file, &pixels, &w, &h) != true)
+//	        {
+//	            printf("Failed to load PPM image file: %s\n", file);
+//	            exit(EXIT_FAILURE);
+//	        }
+//
+//	        g_Bpp = 4;
+//	    }
+//	    else
+//	    {
+//	        cudaDeviceReset();
+//	        exit(EXIT_FAILURE);
+//	    }
 
 	imWidth = (int) w;
 	imHeight = (int) h;
@@ -374,9 +374,9 @@ void loadImage(char *loc_file)
 //    processKernel = new SobelKernel();
     processKernel->CopyToGPU(Image(pixels, imWidth, imHeight));
 
-    static_cast<PitchKernel*>(processKernel)->GetActualSize(&imWidth, &imHeight, &imPitch);
+//    static_cast<PitchKernel*>(processKernel)->GetActualSize(&imWidth, &imHeight, &imPitch);
+//    imWidth = imPitch;
 
-    imWidth = imPitch;
     printf("Result image %dx%d\n", imWidth, imHeight);
 
 }

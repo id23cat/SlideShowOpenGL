@@ -391,20 +391,22 @@ Pixel* MalvarKernel::CallKernel(Pixel *outputBUFFER){
 
 /********************************* MalvarKernel ***********************************************************/
 PitchKernel::PitchKernel(){
-	imPitch = 100;
+	imPitch = 128;
 }
 
 void PitchKernel::CopyToGPU(Image inputImgCPU){
+	if (inputBufGpu != NULL) {
+		checkCudaErrors(cudaFree(inputBufGpu));
+		inputBufGpu = NULL;
+		imPitch = 128;
+	}
+
 	inBufWidth = inputImgCPU.w;
 	imPitch += inBufWidth;
 	inBufHeight = inputImgCPU.h;
 
-	if (inputBufGpu != NULL) {
-		checkCudaErrors(cudaFree(inputBufGpu));
-		inputBufGpu = NULL;
-	}
 	printf("Alocate memory %dx%d\n", inBufWidth, inBufHeight);
-	checkCudaErrors(cudaMalloc(&inputBufGpu, inBufHeight*(inBufWidth + imPitch)*sizeof(Pixel)));
+	checkCudaErrors(cudaMalloc(&inputBufGpu, inBufHeight*imPitch*sizeof(Pixel)));
 //	for(int i=0; i < inBufHeight; i++){
 		checkCudaErrors(cudaMemcpy2D( inputBufGpu, imPitch,
 				inputImgCPU.data, inputImgCPU.w,
@@ -420,10 +422,14 @@ void PitchKernel::GetActualSize(int *width, int *height, int *pitch){
 }
 
 Pixel* PitchKernel::CallKernel(Pixel *outputBUFFER){
-	checkCudaErrors(cudaMemcpy2D( outputBUFFER, imPitch,
+	checkCudaErrors(cudaMemcpy2D( outputBUFFER, inBufWidth,
 			inputBufGpu, imPitch,
 			inBufWidth, inBufHeight,
-			cudaMemcpyHostToDevice ));
+			cudaMemcpyDeviceToDevice ));
+//	checkCudaErrors(cudaMemcpy2D( outputBUFFER, imPitch,
+//			inputBufGpu, imPitch,
+//			inBufWidth, inBufHeight,
+//			cudaMemcpyDeviceToDevice ));
 
 	return outputBUFFER;
 }
