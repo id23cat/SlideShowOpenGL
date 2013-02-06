@@ -30,6 +30,7 @@ int main(int argc, char **argv)
 
 	std::string dir_path = ".";
 	std::string extension = ".pgm";
+//	std::string extension = ".ppm";
 	if(argc > 1)
 		dir_path = argv[1];
 

@@ -18,18 +18,15 @@ struct Image
 		data(d), w(width), h(height){};
 };
 
-// global determines which filter to invoke
-enum SobelDisplayMode {
-	SOBELDISPLAY_IMAGE = 0, SOBELDISPLAY_SOBELTEX, SOBELDISPLAY_SOBELSHARED
+struct ImageC3
+{
+	Pixel *data;
+	unsigned int w;
+	unsigned int h;
 };
 
-extern enum SobelDisplayMode g_SobelDisplayMode;
-
-extern "C" void sobelFilter(Pixel *odata, int iw, int ih,
-		enum SobelDisplayMode mode, float fScale);
-//extern "C" void setupTexture(int iw, int ih, Pixel *data, int Bpp);
-extern "C" void deleteTexture(void);
-extern "C" void initFilter(void);
+void StartIt(Image inputImgCPU, unsigned char *outputBufGpu);
+void StartIt2(Image inputImgCPU, unsigned char *outputBufGpu);
 
 /********************************************************************************************/
 class AbstractKernel {
@@ -58,41 +55,5 @@ public:
 	virtual Pixel* CallKernel(Pixel *outputBUFFER)=0;	// must return outputBufGpu;
 														// outputBUFFER -- buf on GPU
 	static void Reset();
-};
-
-
-class SobelKernel: public AbstractKernel{
-//	cudaChannelFormatDesc desc;
-//	cudaArray *array;
-	enum SobelDisplayMode sobelDisplayMode;
-	float imageScale;	// Image exposure
-	cudaChannelFormatDesc desc;
-
-public:
-	SobelKernel();
-	~SobelKernel();
-	void SetPropeties(enum SobelDisplayMode mode, float fScale);
-	virtual void CopyToGPU(Image inputImgCPU);
-	Pixel* CallKernel(Pixel *outputBUFFER);
-};
-
-
-class MalvarKernel: public AbstractKernel{
-	const size_t BLOCKX;
-	const size_t BLOCKY;
-public:
-	MalvarKernel();
-	void CopyToGPU(Image inputImgCPU);
-	Pixel* CallKernel(Pixel *outputBUFFER);
-
-};
-
-class PitchKernel: public AbstractKernel{
-	size_t imPitch;
-public:
-	PitchKernel();
-	void GetActualSize(int *width, int *height, int *pitch);
-	void CopyToGPU(Image inputImgCPU);
-	Pixel* CallKernel(Pixel *outputBUFFER);
 };
 #endif /* INITCUDA_H_ */

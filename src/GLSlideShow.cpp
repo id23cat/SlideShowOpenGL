@@ -8,7 +8,7 @@
 #include "GLSlideShow.h"
 #include "initCUDA.h"
 
-AbstractKernel *processKernel;
+//AbstractKernel *processKernel;
 
 const char *filterMode[] =
 {
@@ -20,7 +20,7 @@ const char *filterMode[] =
 
 const char *SlideShowSample = "Slideshow";
 
-enum SobelDisplayMode g_SobelDisplayMode;
+//enum SobelDisplayMode g_SobelDisplayMode;
 
 int fpsCount = 0;      // FPS count for averaging
 int fpsLimit = 8;      // FPS limit for sampling
@@ -29,7 +29,7 @@ unsigned int frameCount = 0;
 unsigned int g_TotalErrors = 0;
 
 StopWatchInterface *timer = NULL;
-unsigned int g_Bpp;
+unsigned int g_Bpp = 3;
 unsigned int g_Index = 0;
 bool g_bQAReadback = false;
 struct cudaGraphicsResource *cuda_pbo_resource; // CUDA Graphics Resource (to transfer PBO)
@@ -52,7 +52,7 @@ void computeFPS()
     {
         char fps[256];
         float ifps = 1.f / (sdkGetAverageTimerValue(&timer) / 1000.f);
-        sprintf(fps, "CUDA Edge Detection (%s): %3.1f fps", filterMode[g_SobelDisplayMode], ifps);
+        sprintf(fps, "CUDA Malvar %s: %3.1f fps", SlideShowSample, ifps);
 
         glutSetWindowTitle(fps);
         fpsCount = 0;
@@ -67,7 +67,6 @@ void display(void)
 {
     sdkStartTimer(&timer);
 
-    // Sobel operation
     Pixel *data = NULL;
 
     // map PBO to get CUDA device pointer
@@ -78,36 +77,49 @@ void display(void)
     //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
 
 //    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
-    processKernel->CallKernel(data);
+
+    Image img(pixels, imWidth, imHeight);
+    StartIt(img, data);
+
+//    processKernel->CallKernel(data);
 
     checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
 
-    glClear(GL_COLOR_BUFFER_BIT);
+    // Common display code path
+	{
+		glClear(GL_COLOR_BUFFER_BIT);
 
-    glBindTexture(GL_TEXTURE_2D, texid);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imWidth, imHeight,
-                    GL_LUMINANCE, GL_UNSIGNED_BYTE, OFFSET(0));
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
 
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_TEXTURE_2D);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glBindTexture(GL_TEXTURE_2D, texid);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imWidth, imHeight, GL_RGB,
+				GL_UNSIGNED_BYTE, OFFSET(0));
+//    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imWidth, imHeight,
+//                    GL_LUMINANCE, GL_UNSIGNED_BYTE, OFFSET(0));
 
-    glBegin(GL_QUADS);
-    glVertex2f(0, 0);
-    glTexCoord2f(0, 0);
-    glVertex2f(0, 1);
-    glTexCoord2f(1, 0);
-    glVertex2f(1, 1);
-    glTexCoord2f(1, 1);
-    glVertex2f(1, 0);
-    glTexCoord2f(0, 1);
-    glEnd();
-    glBindTexture(GL_TEXTURE_2D, 0);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_TEXTURE_2D);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+		glBegin(GL_QUADS);
+		{
+			glVertex2f(0, 0);
+			glTexCoord2f(0, 0);
+			glVertex2f(0, 1);
+			glTexCoord2f(1, 0);
+			glVertex2f(1, 1);
+			glTexCoord2f(1, 1);
+			glVertex2f(1, 0);
+			glTexCoord2f(0, 1);
+		}
+		glEnd();
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
     glutSwapBuffers();
 
     sdkStopTimer(&timer);
@@ -117,52 +129,52 @@ void display(void)
 
 void display1(void)
 {
-    sdkStartTimer(&timer);
-
-    // Sobel operation
-    Pixel *data = NULL;
-
-    // map PBO to get CUDA device pointer
-    checkCudaErrors(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
-    size_t num_bytes;
-    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&data, &num_bytes,
-                                                         cuda_pbo_resource));
-    //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
-
-    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
-
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glBindTexture(GL_TEXTURE_2D, texid);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imWidth, imHeight,
-                    GL_LUMINANCE, GL_UNSIGNED_BYTE, OFFSET(0));
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_TEXTURE_2D);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-    glBegin(GL_QUADS);
-    glVertex2f(0, 0);
-    glTexCoord2f(0, 0);
-    glVertex2f(0, 1);
-    glTexCoord2f(1, 0);
-    glVertex2f(1, 1);
-    glTexCoord2f(1, 1);
-    glVertex2f(1, 0);
-    glTexCoord2f(0, 1);
-    glEnd();
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glutSwapBuffers();
-
-    sdkStopTimer(&timer);
-
-    computeFPS();
+//    sdkStartTimer(&timer);
+//
+//    // Sobel operation
+//    Pixel *data = NULL;
+//
+//    // map PBO to get CUDA device pointer
+//    checkCudaErrors(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
+//    size_t num_bytes;
+//    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&data, &num_bytes,
+//                                                         cuda_pbo_resource));
+//    //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
+//
+////    sobelFilter(data, imWidth, imHeight, g_SobelDisplayMode, imageScale);
+//    checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
+//
+//    glClear(GL_COLOR_BUFFER_BIT);
+//
+//    glBindTexture(GL_TEXTURE_2D, texid);
+//    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
+//    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imWidth, imHeight,
+//                    GL_LUMINANCE, GL_UNSIGNED_BYTE, OFFSET(0));
+//    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+//
+//    glDisable(GL_DEPTH_TEST);
+//    glEnable(GL_TEXTURE_2D);
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+//
+//    glBegin(GL_QUADS);
+//    glVertex2f(0, 0);
+//    glTexCoord2f(0, 0);
+//    glVertex2f(0, 1);
+//    glTexCoord2f(1, 0);
+//    glVertex2f(1, 1);
+//    glTexCoord2f(1, 1);
+//    glVertex2f(1, 0);
+//    glTexCoord2f(0, 1);
+//    glEnd();
+//    glBindTexture(GL_TEXTURE_2D, 0);
+//    glutSwapBuffers();
+//
+//    sdkStopTimer(&timer);
+//
+//    computeFPS();
 }
 
 void timerEvent(int value)
@@ -199,7 +211,7 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
 			loadImage(file);
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
 			glBufferData(GL_PIXEL_UNPACK_BUFFER,
-					g_Bpp * sizeof(Pixel) * imWidth * imHeight, pixels,
+					g_Bpp * sizeof(Pixel) * imWidth * imHeight, NULL/*pixels*/,
 					GL_STREAM_DRAW);
 
 			glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
@@ -212,8 +224,8 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
 			}
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 			glBindTexture(GL_TEXTURE_2D, texid);
-			glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_BGRA),
-					imWidth, imHeight, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+			glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_RGB8),
+					imWidth, imHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 			glBindTexture(GL_TEXTURE_2D, 0);
 
 			break;
@@ -230,7 +242,7 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
         	loadImage(file);
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_buffer);
 			glBufferData(GL_PIXEL_UNPACK_BUFFER,
-					g_Bpp * sizeof(Pixel) * imWidth * imHeight, pixels,
+					g_Bpp * sizeof(Pixel) * imWidth * imHeight, NULL/*pixels*/,
 					GL_STREAM_DRAW);
 
 			glGetBufferParameteriv(GL_PIXEL_UNPACK_BUFFER, GL_BUFFER_SIZE, &bsize);
@@ -243,8 +255,8 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
 			}
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 			glBindTexture(GL_TEXTURE_2D, texid);
-			glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_BGRA),
-					imWidth, imHeight, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+			glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_RGB8),
+						imWidth, imHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 			glBindTexture(GL_TEXTURE_2D, 0);
 
         	break;
@@ -273,7 +285,7 @@ void cleanup(void)
     glDeleteBuffers(1, &pbo_buffer);
     glDeleteTextures(1, &texid);
 //    deleteTexture();
-    delete processKernel;
+//    delete processKernel;
 
     sdkDeleteTimer(&timer);
 }
@@ -314,8 +326,8 @@ void initializeData(/*char *file*/)
 
 		glGenTextures(1, &texid);
 		glBindTexture(GL_TEXTURE_2D, texid);
-		glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_BGRA),
-				imWidth, imHeight, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, ((g_Bpp == 1) ? GL_LUMINANCE : GL_RGB8),
+					imWidth, imHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 		glBindTexture(GL_TEXTURE_2D, 0);
 
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -330,7 +342,7 @@ void loadImage(char *loc_file)
 	size_t file_length = strlen(loc_file);
 	printf("Loading image %s...\n", loc_file);
 
-	g_Bpp = 1;
+
 	if(pixels != NULL){
 		free(pixels);
 		pixels = NULL;
@@ -340,6 +352,12 @@ void loadImage(char *loc_file)
 		printf("Failed to load PGM image file: %s\n", loc_file);
 		exit(EXIT_FAILURE);
 	}
+//	if (sdkLoadPPM4(loc_file, &pixels, &w, &h) != true) {
+//			printf("Failed to load PPM image file: %s\n", loc_file);
+//			exit(EXIT_FAILURE);
+//	} g_Bpp = 3;
+
+
 //
 //	    if (!strcmp(&file[file_length-3], "pgm"))
 //	    {
@@ -372,12 +390,13 @@ void loadImage(char *loc_file)
 
 	printf("Source image %dx%d\n", imWidth, imHeight);
 //    processKernel = new SobelKernel();
-    processKernel->CopyToGPU(Image(pixels, imWidth, imHeight));
+
+//    processKernel->CopyToGPU(Image(pixels, imWidth, imHeight));
 
 //    static_cast<PitchKernel*>(processKernel)->GetActualSize(&imWidth, &imHeight, &imPitch);
 //    imWidth = imPitch;
 
-    printf("Result image %dx%d\n", imWidth, imHeight);
+    printf("Result image %dx%dx%d\n", g_Bpp, imWidth, imHeight);
 
 }
 
@@ -435,7 +454,7 @@ void Start(int argc, char **argv, std::vector<std::string> fileList){
 	// First initialize OpenGL context, so we can properly set the GL for CUDA.
 	// This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
 	initGL(&argc, argv);
-	cudaGLSetGLDevice(gpuGetMaxGflopsDeviceId());
+	cudaGLSetGLDevice(0/*gpuGetMaxGflopsDeviceId()*/);
 
 	sdkCreateTimer(&timer);
 	sdkResetTimer(&timer);
@@ -448,7 +467,7 @@ void Start(int argc, char **argv, std::vector<std::string> fileList){
 	fileit = files->begin();
 
 //	processKernel = new SobelKernel();	// creat SobelKernel
-	processKernel = new PitchKernel();	// creat SobelKernel
+//	processKernel = new PitchKernel();	// creat SobelKernel
 	initializeData();
 
 //	loadImage(argv[0]);
